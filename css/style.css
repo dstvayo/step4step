@@ -129,9 +129,11 @@ a { color: var(--primary); text-decoration: none; }
 .task-meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .task-time { font-size: var(--fs-sm); color: var(--text2); }
 .task-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
-.drag-handle { color: var(--text2); cursor: grab; font-size: 18px; flex-shrink: 0; user-select: none; }
-.draggable.dragging { opacity: .4; }
-.draggable.drag-over { border: 2px dashed var(--primary); }
+.drag-handle { color: var(--text2); cursor: grab; font-size: 18px; flex-shrink: 0; user-select: none; touch-action: none; }
+.drag-handle:active { cursor: grabbing; }
+.draggable { transition: box-shadow .15s; }
+.draggable.dragging { opacity: .35; box-shadow: none; }
+.draggable.drag-over { border: 2px dashed var(--primary); background: #ede9fe; }
 
 /* ── Badges ── */
 .badge {
@@ -236,6 +238,52 @@ a { color: var(--primary); text-decoration: none; }
 .alert { padding: 14px 18px; border-radius: var(--radius); font-weight: 600; text-align: center; width: 100%; }
 .alert-success { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; font-size: var(--fs-lg); }
 .loading { font-size: var(--fs-lg); color: var(--text2); }
+
+/* ── Timer Motivation ── */
+.timer-motivation {
+  text-align: center; font-size: var(--fs-sm); color: var(--text2);
+  background: var(--bg2); border-radius: var(--radius); padding: 10px 14px;
+  border-left: 3px solid var(--primary); width: 100%; line-height: 1.5;
+}
+
+/* ── Block Timer ── */
+.block-timer {
+  width: 100%; background: var(--bg2); border-radius: var(--radius);
+  padding: 10px 14px; display: flex; flex-direction: column; gap: 6px;
+}
+.block-timer-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.block-timer-label { font-size: var(--fs-sm); color: var(--text2); flex: 1; }
+.block-timer-time { font-size: var(--fs-lg); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--primary); }
+.block-timer-time.block-warn { color: var(--danger); }
+.block-timer-total { font-size: var(--fs-sm); color: var(--text2); }
+.block-progress-bar { height: 5px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.block-progress-fill { height: 100%; background: var(--primary); border-radius: 3px; transition: width 1s linear; }
+.block-progress-fill.block-fill-warn { background: var(--danger); }
+
+/* ── Done list in timer ── */
+.done-list-mini { width: 100%; }
+.done-list-title { font-size: var(--fs-sm); font-weight: 700; color: var(--success); margin-bottom: 8px; }
+.done-task-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.done-task-row:last-child { border-bottom: none; }
+.done-check { color: var(--success); font-weight: 700; flex-shrink: 0; }
+.done-title { flex: 1; font-size: var(--fs-sm); }
+.done-time { font-size: 11px; color: var(--text2); flex-shrink: 0; }
+.skipped-row .done-check { color: var(--danger); }
+.skipped-x { color: var(--danger) !important; }
+
+/* ── All Done Screen ── */
+.alldone-header { text-align: center; padding: 24px 16px 16px; }
+.alldone-icon { font-size: 64px; line-height: 1; margin-bottom: 10px; }
+.alldone-title { font-size: var(--fs-xl); font-weight: 900; margin-bottom: 6px; }
+.alldone-sub { color: var(--text2); font-size: var(--fs); }
+.alldone-buttons { display: flex; gap: 10px; }
+.alldone-buttons .btn { flex: 1; }
+
+/* ── Break / Pause Screen ── */
+.break-cup { font-size: 80px; line-height: 1; margin-bottom: 12px; }
+.break-title { font-size: var(--fs-xl); font-weight: 700; margin-bottom: 8px; }
+.break-countdown { color: var(--warning) !important; margin-bottom: 8px; }
+.break-hint { font-size: var(--fs-sm); color: var(--text2); }
 
 /* ── Results ── */
 .results-card { width: 100%; max-width: 420px; text-align: center; }

@@ -18,13 +18,24 @@ class TimerVM {
     this.current=null; this.state='IDLE';
     this.timeLeft=0; this.intro=0; this._iv=null;
     this.startedAt=null; this.wakeLock=null; this.onTick=null;
+    this.blockStartedAt=null; this.blockTotalMin=0;
+    this.breakState='NONE'; this.breakLeft=0; this._breakIv=null;
   }
   get total() { return this.done.length+this.skipped.length+this.queue.length+(this.current?1:0); }
   load() {
     this.reset();
     this.queue = DB.getTasks().filter(t=>t.status==='today').sort((a,b)=>a.today_order-b.today_order);
   }
-  begin() { if(this.queue.length) this._next(); }
+  begin() {
+    if(!this.queue.length) return;
+    this.blockStartedAt=Date.now();
+    this.blockTotalMin=DB.getSetting('todayBlockMinutes',0);
+    this._next();
+  }
+  get blockTimeLeft() {
+    if(!this.blockStartedAt||!this.blockTotalMin) return null;
+    return Math.max(0, this.blockTotalMin*60 - Math.floor((Date.now()-this.blockStartedAt)/1000));
+  }
   _next() {
     this._stop();
     if(!this.queue.length) { this.current=null; this.state='ALL_DONE'; this._dropWL(); this._ping(); return; }
@@ -35,6 +46,15 @@ class TimerVM {
   }
   _start() { this._iv=setInterval(()=>this._tick(),1000); }
   _stop()  { clearInterval(this._iv); this._iv=null; }
+  _stopBreak() { clearInterval(this._breakIv); this._breakIv=null; }
+  startBreak() {
+    this.breakState='RUNNING'; this.breakLeft=300;
+    this._breakIv=setInterval(()=>{
+      this.breakLeft--;
+      if(this.breakLeft<=0){ this.breakLeft=0; this.breakState='DONE'; this._stopBreak(); this._beep(); }
+      this._ping();
+    },1000);
+  }
   _tick() {
     if(this.state==='INTRO') { this.intro--; if(this.intro<=0) this.state='RUNNING'; }
     else if(this.state==='RUNNING') {
@@ -96,19 +116,16 @@ const Timer=new TimerVM();
 
 /* ── Router ── */
 function go(view,params={}) {
-  if(view==='timer'&&Timer.state==='ALL_DONE') {
-    S.sessionResults=Timer.getResults(); view='results';
-  }
   S.view=view; S.params=params;
   if(['inbox','new','today','timer','history'].includes(view)) S.tab=view;
-  if(view!=='timer') Timer.onTick=null;
+  if(view!=='timer') { Timer.onTick=null; }
   render();
 }
 
 /* ── Render ── */
 function render() {
-  if(S.view==='timer'&&Timer.state==='ALL_DONE') {
-    S.sessionResults=Timer.getResults(); S.view='results';
+  if(S.view==='timer'&&Timer.breakState==='DONE') {
+    DB.saveResult(Timer.getResults()); DB.setSetting('todayBlockMinutes',0); Timer.reset(); go('inbox'); return;
   }
   document.documentElement.setAttribute('data-theme',DB.getSetting('theme','light'));
   document.documentElement.setAttribute('data-font',DB.getSetting('fontSize','normal'));
@@ -325,6 +342,8 @@ function vToday() {
 /* ── Timer ── */
 function vTimer() {
   const t=Timer.current;
+
+  /* IDLE */
   if(Timer.state==='IDLE') {
     const todayN=DB.getTasks().filter(t=>t.status==='today').length;
     return `<div class="view">${tabBar()}${hdr('Timer')}
@@ -335,36 +354,114 @@ function vTimer() {
           :`<p>Erstelle erst deine Heute-Liste und starte den Timer.</p><button class="btn btn-primary" data-action="go" data-view="inbox">Zu den Aufgaben →</button>`}
       </div></div>`;
   }
-  if(Timer.state==='ALL_DONE') return `<div class="view"><div class="content center-content"><p class="loading">🎉 Berechne Ergebnisse…</p></div></div>`;
-  const isIntro=Timer.state==='INTRO',isPaused=Timer.state==='PAUSED',isFinished=Timer.state==='FINISHED';
-  const pct=t?Math.max(0,(Timer.timeLeft/(t.estimated_minutes*60))*100):0;
-  return `<div class="view">${tabBar()}
-    <div class="sticky-header">
-      ${hdr('Timer')}
-      <p class="sticky-hint">Konzentriere dich nun auf die Erledigung.</p>
-    </div>
-    <div class="content timer-content">
-      ${isIntro?`<div class="intro-countdown"><p class="intro-text">Mach dich bereit…</p><div class="countdown-big">${Timer.intro}</div></div>`:''}
-      ${t?`<div class="timer-task card">
-        <div class="task-title-lg">${esc(t.title)}</div>
-        <div class="task-meta" style="justify-content:center">
-          <span class="badge badge-cat">${esc(t.category)}</span>
-          <span class="badge">${t.estimated_minutes} min geplant</span>
-          ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
+
+  /* PAUSE / BREAK */
+  if(Timer.breakState==='RUNNING') {
+    return `<div class="view">${tabBar()}${hdr('Pause')}
+      <div class="content center-content">
+        <div class="break-cup">☕</div>
+        <p class="break-title">Gönn dir eine kurze Pause!</p>
+        <div class="countdown-time break-countdown">${fmtTime(Timer.breakLeft)}</div>
+        <p class="break-hint">Der Timer schließt sich automatisch nach Ablauf.</p>
+      </div></div>`;
+  }
+
+  /* ALL DONE */
+  if(Timer.state==='ALL_DONE') {
+    return `<div class="view">${tabBar()}
+      <div class="sticky-header">${hdr('Timer')}</div>
+      <div class="content">
+        <div class="alldone-header">
+          <div class="alldone-icon">🎉</div>
+          <h2 class="alldone-title">Alle Aufgaben erledigt!</h2>
+          <p class="alldone-sub">Hervorragende Arbeit! Dein Block ist abgeschlossen.</p>
+        </div>
+        ${Timer.done.length>0?`<div class="card">
+          <h3 class="card-title">✓ Erledigte Aufgaben (${Timer.done.length})</h3>
+          ${Timer.done.map(d=>`<div class="done-task-row">
+            <span class="done-check">✓</span>
+            <span class="done-title">${esc(d.title)}</span>
+            <span class="done-time">${d.actual_minutes} min</span>
+            ${d.score_bonus?'<span class="badge badge-rec">⚡</span>':''}
+          </div>`).join('')}
+        </div>`:''}
+        ${Timer.skipped.length>0?`<div class="card">
+          <h3 class="card-title">⊘ Übersprungen (${Timer.skipped.length})</h3>
+          ${Timer.skipped.map(d=>`<div class="done-task-row skipped-row">
+            <span class="done-check skipped-x">✗</span>
+            <span class="done-title">${esc(d.title)}</span>
+          </div>`).join('')}
+        </div>`:''}
+      </div>
+      <div class="footer-fixed">
+        <div class="alldone-buttons">
+          <button class="btn btn-secondary btn-lg" data-action="t-break">☕ 5 Min Pause</button>
+          <button class="btn btn-primary btn-lg" data-action="t-end-block">✓ Block beenden</button>
         </div>
       </div>
-      <div class="timer-display${isFinished?' timer-done':''}">
-        <div class="countdown-time">${fmtTime(Timer.timeLeft)}</div>
-        <div class="timer-progress-bar"><div class="timer-progress-fill" style="width:${pct}%"></div></div>
-      </div>
-      <div class="timer-stats">
-        <span>✓ ${Timer.done.length} erledigt</span>
-        <span>◎ ${Timer.queue.length+(t?1:0)} verbleibend</span>
-        <span>⊘ ${Timer.skipped.length} übersprungen</span>
-      </div>
-      ${isFinished?`<div class="alert alert-success">🎉 Geschafft! Super gemacht!</div>`:''}
+    </div>`;
+  }
+
+  /* ACTIVE (INTRO / RUNNING / PAUSED / FINISHED) */
+  const isIntro=Timer.state==='INTRO',isPaused=Timer.state==='PAUSED',isFinished=Timer.state==='FINISHED';
+  const pct=t?Math.max(0,(Timer.timeLeft/(t.estimated_minutes*60))*100):0;
+  const bLeft=Timer.blockTimeLeft;
+  const bPct=bLeft!==null&&Timer.blockTotalMin>0?Math.max(0,(bLeft/(Timer.blockTotalMin*60))*100):null;
+
+  return `<div class="view">${tabBar()}
+    <div class="sticky-header">${hdr('Timer')}</div>
+    <div class="content timer-content">
+
+      ${isIntro?`<div class="intro-countdown">
+        <p class="intro-text">Mach dich bereit…</p>
+        <div class="countdown-big">${Timer.intro}</div>
+      </div>`:''}
+
+      ${t&&!isIntro?`
+        <p class="timer-motivation">Fokussiere dich jetzt auf deine Aufgabe. Bist du schneller, bestätige mit dem Button <strong>„Fertig"</strong>.</p>
+
+        <div class="timer-task card">
+          <div class="task-title-lg">${esc(t.title)}</div>
+          <div class="task-meta" style="justify-content:center;margin-top:6px">
+            <span class="badge badge-cat">${esc(t.category)}</span>
+            <span class="badge">${t.estimated_minutes} min geplant</span>
+            ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
+          </div>
+        </div>
+
+        <div class="timer-display${isFinished?' timer-done':''}">
+          <div class="countdown-time">${fmtTime(Timer.timeLeft)}</div>
+          <div class="timer-progress-bar"><div class="timer-progress-fill" style="width:${pct}%"></div></div>
+        </div>
+
+        ${bLeft!==null?`<div class="block-timer">
+          <div class="block-timer-row">
+            <span class="block-timer-label">⏰ Block verbleibend</span>
+            <span class="block-timer-time${bLeft<300?' block-warn':''}">${fmtTime(bLeft)}</span>
+            <span class="block-timer-total">von ${Timer.blockTotalMin} min</span>
+          </div>
+          ${bPct!==null?`<div class="block-progress-bar"><div class="block-progress-fill${bLeft<300?' block-fill-warn':''}" style="width:${bPct}%"></div></div>`:''}
+        </div>`:''}
+
+        <div class="timer-stats">
+          <span>✓ ${Timer.done.length} erledigt</span>
+          <span>◎ ${Timer.queue.length+1} verbleibend</span>
+          <span>⊘ ${Timer.skipped.length} übersprungen</span>
+        </div>
+
+        ${isFinished?`<div class="alert alert-success">🎉 Geschafft! Super gemacht!</div>`:''}
+
+        ${Timer.done.length>0?`<div class="done-list-mini card">
+          <p class="done-list-title">✓ Bereits erledigt</p>
+          ${Timer.done.map(d=>`<div class="done-task-row">
+            <span class="done-check">✓</span>
+            <span class="done-title">${esc(d.title)}</span>
+            <span class="done-time">${d.actual_minutes} min</span>
+          </div>`).join('')}
+        </div>`:''}
       `:''}
     </div>
+
     <div class="footer-fixed">
       ${isFinished
         ?`<button class="btn btn-primary btn-full btn-lg" data-action="t-advance">Zur nächsten Aufgabe ›</button>`
@@ -588,6 +685,8 @@ document.addEventListener('click', e=>{
     case 't-skip':     Timer.skipTask(); break;
     case 't-later':    Timer.laterTask(); break;
     case 't-advance':  Timer.advanceAfterFinish(); break;
+    case 't-end-block':endBlock(); break;
+    case 't-break':    Timer.startBreak(); break;
     case 'save-results':saveResults(); break;
     case 'cal-nav':    go('history',{calDate:date}); break;
     case 'set-theme':  DB.setSetting('theme',val); render(); break;
@@ -686,6 +785,13 @@ function startTimer() {
   Timer.begin(); go('timer');
 }
 
+function endBlock() {
+  DB.saveResult(Timer.getResults());
+  Timer.done.forEach(t=>DB.deleteTask(t.id));
+  DB.setSetting('todayBlockMinutes',0);
+  Timer.reset(); go('inbox');
+}
+
 function saveResults() {
   if(!S.sessionResults) return;
   DB.saveResult(S.sessionResults);
@@ -710,21 +816,42 @@ function pickColor(color) {
 function initDnD() {
   const list=document.getElementById('today-list'); if(!list) return;
   let src=null;
+
   list.querySelectorAll('.draggable').forEach(el=>{
-    el.addEventListener('dragstart',e=>{src=el;e.dataTransfer.effectAllowed='move';el.classList.add('dragging');});
-    el.addEventListener('dragend',()=>{el.classList.remove('dragging');list.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));});
-    el.addEventListener('dragover',e=>{e.preventDefault();if(el!==src)el.classList.add('drag-over');});
-    el.addEventListener('dragleave',()=>el.classList.remove('drag-over'));
+    el.addEventListener('dragstart',e=>{
+      src=el;
+      e.dataTransfer.effectAllowed='move';
+      e.dataTransfer.setData('text/plain',el.dataset.id); // Safari + Firefox erforderlich
+      setTimeout(()=>el.classList.add('dragging'),0);
+    });
+    el.addEventListener('dragend',()=>{
+      el.classList.remove('dragging');
+      list.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));
+      src=null;
+    });
+    el.addEventListener('dragover',e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      if(el!==src) el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave',e=>{
+      if(!el.contains(e.relatedTarget)) el.classList.remove('drag-over');
+    });
     el.addEventListener('drop',e=>{
-      e.preventDefault(); el.classList.remove('drag-over'); if(src===el) return;
+      e.preventDefault(); e.stopPropagation();
+      el.classList.remove('drag-over');
+      if(!src||src===el) return;
       const all=[...list.querySelectorAll('.draggable')];
       all.indexOf(src)<all.indexOf(el)?el.after(src):el.before(src);
-      const tasks=DB.getTasks();
       [...list.querySelectorAll('.draggable')].forEach((c,i)=>{
-        const t=tasks.find(t=>t.id===c.dataset.id); if(t){t.today_order=i;DB.saveTask(t);}
+        const t=DB.getTasks().find(t=>t.id===c.dataset.id);
+        if(t){t.today_order=i; DB.saveTask(t);}
       });
     });
   });
+
+  list.addEventListener('dragover',e=>e.preventDefault());
+  list.addEventListener('drop',e=>e.preventDefault());
 }
 
 /* ── Init ── */
