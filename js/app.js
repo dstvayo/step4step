@@ -4,7 +4,7 @@
 const uuid    = () => crypto.randomUUID();
 const todayStr= () => new Date().toISOString().split('T')[0];
 const fmt2    = n  => String(n).padStart(2,'0');
-const fmtTime = s  => `${fmt2(Math.floor(Math.abs(s)/60))}:${fmt2(Math.abs(s)%60)}`;
+const fmtTime = s  => `${s<0?'-':''}${fmt2(Math.floor(Math.abs(s)/60))}:${fmt2(Math.abs(s)%60)}`;
 const esc     = s  => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 /* ── State ── */
@@ -20,6 +20,7 @@ class TimerVM {
     this.startedAt=null; this.wakeLock=null; this.onTick=null;
     this.blockStartedAt=null; this.blockTotalMin=0;
     this.breakState='NONE'; this.breakLeft=0; this._breakIv=null;
+    this.overtimeMax=0; this._pausedState='RUNNING';
   }
   get total() { return this.done.length+this.skipped.length+this.queue.length+(this.current?1:0); }
   load() {
@@ -59,13 +60,22 @@ class TimerVM {
     if(this.state==='INTRO') { this.intro--; if(this.intro<=0) this.state='RUNNING'; }
     else if(this.state==='RUNNING') {
       this.timeLeft--;
-      if(this.timeLeft<=0) { this.timeLeft=0; this.state='FINISHED'; this._stop(); this._beep(); }
+      if(this.timeLeft<=0) {
+        this.timeLeft=0; this.state='OVERTIME';
+        this.overtimeMax = this.blockTimeLeft ?? (this.current.estimated_minutes*60);
+        if(!this.overtimeMax) this.overtimeMax = this.current.estimated_minutes*60;
+        this._beep();
+      }
+    }
+    else if(this.state==='OVERTIME') {
+      this.timeLeft--;
+      if(-this.timeLeft >= this.overtimeMax) { this.timeLeft=-this.overtimeMax; this._stop(); }
     }
     this._ping();
   }
   togglePause() {
-    if(this.state==='RUNNING') { this.state='PAUSED'; this._stop(); }
-    else if(this.state==='PAUSED') { this.state='RUNNING'; this._start(); }
+    if(this.state==='RUNNING'||this.state==='OVERTIME') { this._pausedState=this.state; this.state='PAUSED'; this._stop(); }
+    else if(this.state==='PAUSED') { this.state=this._pausedState; this._start(); }
     this._ping();
   }
   markDone() {
@@ -138,6 +148,11 @@ function render() {
 function afterRender() {
   if(S.view==='today') initDnD();
   if(S.view==='timer') Timer.onTick=render;
+  if(S.view==='inbox'&&S._refocusSearch) {
+    S._refocusSearch=false;
+    const inp=document.querySelector('.search-input');
+    if(inp) { inp.focus(); return; }
+  }
   window.scrollTo(0,0);
 }
 
@@ -173,15 +188,23 @@ function vWelcome() {
 function vInbox() {
   const cats=DB.getCategories();
   const fCat=S.params.fCat||'all', fPri=S.params.fPri||'all', q=S.params.q||'';
-  let tasks=DB.getTasks().filter(t=>['later','today','skipped'].includes(t.status));
+  let tasks=DB.getTasks().filter(t=>['later','skipped'].includes(t.status));
   if(fCat!=='all') tasks=tasks.filter(t=>t.category===fCat);
   if(fPri!=='all') tasks=tasks.filter(t=>t.priority===fPri);
   if(q) tasks=tasks.filter(t=>t.title.toLowerCase().includes(q.toLowerCase()));
   const pL={low:'Niedrig',medium:'Mittel',high:'Hoch'};
   const pC={low:'badge-low',medium:'badge-medium',high:'badge-high'};
+  const blockMin=DB.getSetting('todayBlockMinutes',0);
+  const todayTasks=DB.getTasks().filter(t=>t.status==='today');
+  const todayMin=todayTasks.reduce((s,t)=>s+t.estimated_minutes,0);
   return `<div class="view">${tabBar()}
     <div class="sticky-header">
       ${hdr('Aufgaben')}
+      ${blockMin>0?`<div class="today-stats">
+        <span class="stat-item">📅 ${todayTasks.length} Aufgaben</span>
+        <span class="stat-item">⏱ ${todayMin} / ${blockMin} min</span>
+        <span class="stat-item ${todayMin>blockMin?'stat-over':'stat-ok'}">${blockMin-todayMin>=0?blockMin-todayMin+' min frei':Math.abs(blockMin-todayMin)+' min über'}</span>
+      </div>`:''}
       <p class="sticky-hint">Wähle hier deine Aufgaben für Heute.</p>
       <div class="filters">
         <input type="search" class="search-input" placeholder="Aufgabe suchen…" value="${esc(q)}" data-action="search">
@@ -200,7 +223,7 @@ function vInbox() {
     <div class="content">
       ${tasks.length===0
         ?`<div class="empty-state"><div class="empty-icon">📋</div><p>Keine Aufgaben gefunden.</p><button class="btn btn-primary" data-action="go" data-view="new">Neue Aufgabe ➕</button></div>`
-        :tasks.map(t=>`<div class="task-card${t.status==='today'?' task-today':''}">
+        :tasks.map(t=>`<div class="task-card">
           <div class="task-main" data-action="edit" data-id="${t.id}">
             <div class="task-title">${esc(t.title)}</div>
             <div class="task-meta">
@@ -211,9 +234,7 @@ function vInbox() {
             </div>
           </div>
           <div class="task-actions">
-            ${t.status!=='today'
-              ?`<button class="btn btn-sm btn-today" data-action="add-today" data-id="${t.id}">📅 Heute</button>`
-              :`<span class="badge badge-today">✓ Heute</span>`}
+            <button class="btn btn-sm btn-today" data-action="add-today" data-id="${t.id}">📅 Heute</button>
             <button class="btn btn-sm btn-danger-sm" data-action="del-task" data-id="${t.id}">🗑️</button>
           </div>
         </div>`).join('')}
@@ -328,7 +349,7 @@ function vToday() {
               </div>
             </div>
             <div class="task-actions">
-              <button class="btn btn-sm btn-danger-sm" data-action="rm-today" data-id="${t.id}">✕</button>
+              <button class="btn btn-sm btn-back-inbox" data-action="rm-today" data-id="${t.id}">← Zurück</button>
             </div>
           </div>`).join('')}
     </div>
@@ -402,13 +423,31 @@ function vTimer() {
     </div>`;
   }
 
-  /* ACTIVE (INTRO / RUNNING / PAUSED / FINISHED) */
-  const isIntro=Timer.state==='INTRO',isPaused=Timer.state==='PAUSED',isFinished=Timer.state==='FINISHED';
+  /* ACTIVE (INTRO / RUNNING / PAUSED / OVERTIME / FINISHED) */
+  const isIntro=Timer.state==='INTRO';
+  const isPaused=Timer.state==='PAUSED';
+  const isFinished=Timer.state==='FINISHED';
+  const isOvertime=Timer.state==='OVERTIME';
+
+  /* Determine color phase */
+  let timerPhase='green';
+  if(t&&!isIntro&&!isFinished) {
+    if(isOvertime) {
+      timerPhase='overtime';
+    } else {
+      const total=t.estimated_minutes*60;
+      const pct=total>0?Timer.timeLeft/total:1;
+      if(pct<=0.1) timerPhase='blue';
+      else if(pct<=0.5) timerPhase='red';
+      else timerPhase='green';
+    }
+  }
+
   const pct=t?Math.max(0,(Timer.timeLeft/(t.estimated_minutes*60))*100):0;
   const bLeft=Timer.blockTimeLeft;
   const bPct=bLeft!==null&&Timer.blockTotalMin>0?Math.max(0,(bLeft/(Timer.blockTotalMin*60))*100):null;
 
-  return `<div class="view">${tabBar()}
+  return `<div class="view timer-view-${timerPhase}">${tabBar()}
     <div class="sticky-header">${hdr('Timer')}</div>
     <div class="content timer-content">
 
@@ -418,7 +457,7 @@ function vTimer() {
       </div>`:''}
 
       ${t&&!isIntro?`
-        <p class="timer-motivation">Fokussiere dich jetzt auf deine Aufgabe. Bist du schneller, bestätige mit dem Button <strong>„Fertig"</strong>.</p>
+        ${!isOvertime?`<p class="timer-motivation">Fokussiere dich jetzt auf deine Aufgabe. Bist du schneller, bestätige mit dem Button <strong>„Fertig"</strong>.</p>`:''}
 
         <div class="timer-task card">
           <div class="task-title-lg">${esc(t.title)}</div>
@@ -433,6 +472,12 @@ function vTimer() {
           <div class="countdown-time">${fmtTime(Timer.timeLeft)}</div>
           <div class="timer-progress-bar"><div class="timer-progress-fill" style="width:${pct}%"></div></div>
         </div>
+
+        ${isOvertime?`<div class="overtime-dialog card">
+          <div class="overtime-icon">⏰</div>
+          <h3 class="overtime-title">Zeit abgelaufen!</h3>
+          <p class="overtime-sub">Hast du die Aufgabe erledigt?</p>
+        </div>`:''}
 
         ${bLeft!==null?`<div class="block-timer">
           <div class="block-timer-row">
@@ -465,6 +510,11 @@ function vTimer() {
     <div class="footer-fixed">
       ${isFinished
         ?`<button class="btn btn-primary btn-full btn-lg" data-action="t-advance">Zur nächsten Aufgabe ›</button>`
+        :isOvertime
+        ?`<div class="overtime-buttons">
+            <button class="btn btn-success btn-lg" data-action="t-done">✓ Erledigt</button>
+            <button class="btn btn-secondary btn-lg" data-action="t-skip">✗ Nicht erledigt</button>
+          </div>`
         :`<div class="timer-buttons">
           <button class="btn ${isPaused?'btn-primary':'btn-secondary'}" data-action="t-pause">${isPaused?'▶ Weiter':'⏸ Pause'}</button>
           <button class="btn btn-success" data-action="t-done">✓ Fertig</button>
@@ -711,7 +761,7 @@ document.addEventListener('change', e=>{
 
 document.addEventListener('input', e=>{
   const {action}=e.target.dataset;
-  if(action==='search'){S.params.q=e.target.value;render();}
+  if(action==='search'){S.params.q=e.target.value;S._refocusSearch=true;render();}
   // Sync custom time input with button group
   if(e.target.id==='f-time'){
     document.querySelectorAll('[data-action="set-time"]').forEach(b=>b.classList.toggle('active',b.dataset.val===e.target.value));

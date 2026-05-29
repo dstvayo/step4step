@@ -102,6 +102,7 @@ a { color: var(--primary); text-decoration: none; }
 .btn-full      { width: 100%; }
 .btn-danger-sm { background: #fee2e2; color: var(--danger); padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm); }
 .btn-today     { background: #ede9fe; color: var(--primary); padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-weight: 600; }
+.btn-back-inbox { background: #e0f2fe; color: #0369a1; padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-weight: 600; }
 .btn-link      { background: none; color: var(--primary); font-size: var(--fs-sm); padding: 0; font-weight: 500; }
 .btn-group     { display: flex; gap: 6px; flex-wrap: wrap; }
 .btn-toggle    { background: var(--bg3); color: var(--text2); padding: 8px 14px; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-weight: 600; }
@@ -353,3 +354,20 @@ a { color: var(--primary); text-decoration: none; }
 .color-swatch { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: transform .15s; }
 .color-swatch:hover { transform: scale(1.15); }
 .color-swatch.selected { border-color: var(--text); transform: scale(1.15); }
+
+/* ── Timer Phases ── */
+.timer-view-green .countdown-time { color: var(--success); }
+.timer-view-red   .countdown-time { color: var(--danger); }
+.timer-view-blue  .countdown-time { color: var(--primary); }
+.timer-view-overtime .countdown-time { color: var(--danger); }
+
+.timer-view-blue .content,
+.timer-view-overtime .content { background: #fef9c3; }
+
+/* ── Overtime Dialog ── */
+.overtime-dialog { text-align: center; border: 2px solid var(--danger); width: 100%; }
+.overtime-icon  { font-size: 48px; line-height: 1; margin-bottom: 8px; }
+.overtime-title { font-size: var(--fs-xl); font-weight: 900; color: var(--danger); margin-bottom: 6px; }
+.overtime-sub   { font-size: var(--fs); color: var(--text2); }
+.overtime-buttons { display: flex; gap: 10px; width: 100%; }
+.overtime-buttons .btn { flex: 1; }
