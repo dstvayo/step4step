@@ -27,6 +27,8 @@ class TimerVM {
     this.blockStartedAt=null; this.blockTotalMin=0;
     this.breakState='NONE'; this.breakLeft=0; this._breakIv=null;
     this.overtimeMax=0; this._pausedState='RUNNING';
+    this._pausedSec=0; this._pauseStartedAt=null; // Hintergrund-Timer
+    this._notified=false;
   }
   get total() { return this.done.length+this.skipped.length+this.queue.length+(this.current?1:0); }
   load() {
@@ -49,6 +51,8 @@ class TimerVM {
     this.current=this.queue.shift();
     this.timeLeft=this.current.estimated_minutes*60;
     this.intro=5; this.startedAt=Date.now(); this.state='INTRO';
+    this._pausedSec=0; this._pauseStartedAt=null; this._notified=false;
+    this._saveTimerState();
     this._wakelock(); this._start();
   }
   _start() { this._iv=setInterval(()=>this._tick(),1000); }
@@ -63,26 +67,51 @@ class TimerVM {
     },1000);
   }
   _tick() {
-    if(this.state==='INTRO') { this.intro--; if(this.intro<=0) this.state='RUNNING'; }
-    else if(this.state==='RUNNING') {
-      this.timeLeft--;
-      if(this.timeLeft<=0) {
-        this.timeLeft=0; this.state='OVERTIME';
-        this.overtimeMax = this.blockTimeLeft ?? (this.current.estimated_minutes*60);
-        if(!this.overtimeMax) this.overtimeMax = this.current.estimated_minutes*60;
-        this._beep();
-      }
+    if(!this.current||this.state==='PAUSED') return;
+    // Zeit aus Timestamp berechnen – funktioniert auch nach Hintergrund-Pause
+    const elapsed=(Date.now()-this.startedAt)/1000 - this._pausedSec;
+    if(elapsed<5) {
+      this.intro=Math.max(0,Math.ceil(5-elapsed));
+      this.state='INTRO'; this._ping(); return;
     }
-    else if(this.state==='OVERTIME') {
-      this.timeLeft--;
-      if(-this.timeLeft >= this.overtimeMax) { this.timeLeft=-this.overtimeMax; this._stop(); }
+    const taskElapsed=elapsed-5;
+    const total=this.current.estimated_minutes*60;
+    const newLeft=total-taskElapsed;
+    if(newLeft>0) {
+      this.timeLeft=Math.round(newLeft);
+      if(this.state==='INTRO') this.state='RUNNING';
+    } else {
+      if(this.state==='RUNNING'||this.state==='INTRO') {
+        this.state='OVERTIME';
+        this.overtimeMax=this.blockTimeLeft??(total);
+        if(!this.overtimeMax) this.overtimeMax=total;
+        this._beep();
+        if(!this._notified){ this._notified=true; _sendTimerNotification(this.current.title); }
+      }
+      this.timeLeft=Math.round(newLeft); // negativ in Overtime
+      if(-this.timeLeft>=this.overtimeMax){ this.timeLeft=-this.overtimeMax; this._stop(); }
     }
     this._ping();
   }
   togglePause() {
-    if(this.state==='RUNNING'||this.state==='OVERTIME') { this._pausedState=this.state; this.state='PAUSED'; this._stop(); }
-    else if(this.state==='PAUSED') { this.state=this._pausedState; this._start(); }
+    if(this.state==='RUNNING'||this.state==='OVERTIME') {
+      this._pausedState=this.state; this.state='PAUSED'; this._stop();
+      this._pauseStartedAt=Date.now();
+    } else if(this.state==='PAUSED') {
+      this._pausedSec+=(Date.now()-this._pauseStartedAt)/1000;
+      this._pauseStartedAt=null;
+      this.state=this._pausedState; this._start();
+    }
     this._ping();
+  }
+  _saveTimerState() {
+    if(!this.current) { localStorage.removeItem('timer_running'); return; }
+    localStorage.setItem('timer_running', JSON.stringify({
+      taskId:this.current.id, startedAt:this.startedAt,
+      pausedSec:this._pausedSec, state:this.state,
+      blockStartedAt:this.blockStartedAt, blockTotalMin:this.blockTotalMin,
+      queueIds:this.queue.map(t=>t.id), doneIds:this.done.map(t=>t.id),
+    }));
   }
   markDone() {
     const t=this.current;
@@ -180,7 +209,7 @@ const TABS=[
   {id:'history',icon:'📊',label:'Historie'},
 ];
 const tabBar=()=>`<nav class="tabbar">${TABS.map(t=>`<button class="tab${S.tab===t.id?' active':''}" data-action="go" data-view="${t.id}"><span class="tab-icon">${t.icon}</span><span class="tab-label">${t.label}</span></button>`).join('')}</nav>`;
-const hdr=(title,back=false)=>`<header class="header"><div class="header-left">${back?`<button class="btn-icon" data-action="back">‹</button>`:`<span class="logo">S4S</span>`}</div><h1 class="header-title">${title}</h1><div class="header-right"><button class="btn-icon" data-action="go" data-view="settings">⚙️</button></div></header>`;
+const hdr=(title,back=false)=>`<header class="header"><div class="header-left">${back?`<button class="btn-icon" data-action="back">‹</button>`:`<span class="logo">S4S</span>`}</div><h1 class="header-title">${title}</h1><div class="header-right">${Sync.isConnected()?'<span class="sync-dot" title="Synchronisiert">☁️</span>':''}<button class="btn-icon" data-action="go" data-view="settings">⚙️</button></div></header>`;
 
 /* ── Welcome ── */
 function vWelcome() {
@@ -688,6 +717,19 @@ function vSettings() {
         </div>
       </div>
       <div class="card settings-card">
+        <h3 class="card-title">☁️ Geräte-Synchronisation (Firebase)</h3>
+        ${Sync.isConnected()
+          ?`<div class="setting-row"><span class="setting-label">Angemeldet als</span><span class="sync-email">${Sync.getUserEmail()||'Google'}</span></div>
+            <div class="setting-row"><span class="setting-label">Status</span><span class="badge badge-rec">✓ Synchron</span></div>
+            <button class="btn btn-sm btn-secondary mt-sm" data-action="sync-signout">Abmelden</button>`
+          :Sync.hasConfig()
+            ?`<p class="form-hint">Firebase konfiguriert – bitte anmelden:</p>
+              <button class="btn btn-primary btn-full" data-action="sync-signin">Mit Google anmelden 🔑</button>`
+            :`<p class="form-hint">Firebase-Projekt einrichten (console.firebase.google.com), dann Konfiguration hier einfügen:</p>
+              <textarea id="fb-config-input" class="form-input" rows="4" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
+              <button class="btn btn-primary btn-full mt-sm" data-action="save-fb-config">Konfiguration speichern</button>`}
+      </div>
+      <div class="card settings-card">
         <h3 class="card-title">🤖 KI-Coach (Google Gemini)</h3>
         ${AI.hasKey()
           ?`<div class="setting-row"><span class="setting-label">Google AI API-Schlüssel</span><span class="badge badge-rec">✓ Verbunden</span></div>
@@ -777,6 +819,9 @@ document.addEventListener('click', e=>{
     case 'set-time':   setToggle('set-time','f-time',val); break;
     case 'set-status': setToggle('set-status','f-status',val); break;
     /* ── KI-Aktionen ── */
+    case 'save-fb-config':   saveFbConfig(); break;
+    case 'sync-signin':      Sync.signIn().then(()=>render()).catch(e=>alert('Fehler: '+e.message)); break;
+    case 'sync-signout':     Sync.signOut(); break;
     case 'save-ai-key':      saveAiKey(); break;
     case 'remove-ai-key':    DB.setSetting('geminiKey',''); render(); break;
     case 'send-chat':        sendChat(); break;
@@ -876,6 +921,7 @@ function setBlock() {
 function startTimer() {
   Timer.load();
   if(!Timer.queue.length){alert('Keine Aufgaben in der Heute-Liste!');return;}
+  _requestNotifPerm(); // Benachrichtigung-Erlaubnis anfragen
   Timer.begin(); go('timer');
 }
 
@@ -1106,6 +1152,19 @@ function vKI() {
 }
 
 /* ── KI Action Functions ── */
+function saveFbConfig() {
+  const raw=(document.getElementById('fb-config-input')?.value||'').trim();
+  if(!raw){alert('Bitte die Firebase-Konfiguration eingeben.');return;}
+  try {
+    JSON.parse(raw); // Validierung
+    DB.setSetting('firebaseConfig',raw);
+    Sync.init().then(ok=>{
+      if(ok) render();
+      else { render(); setTimeout(()=>Sync.signIn().then(()=>render()).catch(()=>{}),300); }
+    });
+  } catch { alert('Ungültiges JSON – bitte die Firebase-Konfiguration prüfen.'); }
+}
+
 function saveAiKey() {
   const key=(document.getElementById('ai-key-input')?.value||'').trim();
   if(!key){alert('Bitte einen API-Schlüssel eingeben.');return;}
@@ -1198,9 +1257,59 @@ function acceptAllSubtasks() {
   S.decomposeResult=null; render();
 }
 
+/* ── Benachrichtigungen (Feature ③) ── */
+async function _requestNotifPerm() {
+  if(!('Notification' in window)) return false;
+  if(Notification.permission==='granted') return true;
+  if(Notification.permission==='denied') return false;
+  return (await Notification.requestPermission())==='granted';
+}
+
+function _sendTimerNotification(title) {
+  if(!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.ready.then(reg=>{
+    reg.showNotification('⏰ Zeit abgelaufen!',{
+      body:`"${title}" – Erledigt oder weiter?`,
+      icon:'/icons/icon.svg', badge:'/icons/icon.svg',
+      tag:'s4s-timer', requireInteraction:true,
+      vibrate:[200,100,200],
+    });
+  }).catch(()=>{
+    if(Notification.permission==='granted')
+      new Notification('⏰ Zeit abgelaufen!',{body:`"${title}"`});
+  });
+}
+
+/* ── Hintergrund-Timer: Seite wieder sichtbar ── */
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden&&['RUNNING','OVERTIME','INTRO'].includes(Timer.state)) {
+    Timer._tick(); render(); // sofort neu berechnen
+  }
+});
+
+/* ── Sync-Debounce (Feature ①) ── */
+let _syncTimer=null;
+function scheduleSync() {
+  clearTimeout(_syncTimer);
+  _syncTimer=setTimeout(()=>{
+    if(typeof Sync!=='undefined'&&Sync.isConnected()) Sync.pushAll();
+  },2000);
+}
+// localStorage-Patch: jede Daten-Schreiboperation triggert Sync
+const _origSetItem=localStorage.setItem.bind(localStorage);
+localStorage.setItem=function(k,v){
+  _origSetItem(k,v);
+  if(['tasks','results','categories'].includes(k)) scheduleSync();
+};
+
+/* ── startTimer: Berechtigung anfragen ── */
+const _origStartTimer=startTimer;
+
 /* ── Init ── */
 function init() {
   if(DB.getSetting('hideWelcome',false)){S.view='inbox';S.tab='inbox';}
+  // Sync initialisieren wenn konfiguriert
+  if(typeof Sync!=='undefined'&&Sync.hasConfig()) Sync.init().then(()=>render());
   render();
 }
 init();

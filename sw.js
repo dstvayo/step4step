@@ -1,10 +1,11 @@
-const CACHE = 's4s-v1';
+const CACHE = 's4s-v2';
 const ASSETS = [
   '/',
   '/index.html',
   '/css/style.css',
   '/js/db.js',
   '/js/ai.js',
+  '/js/sync.js',
   '/js/app.js',
   '/icons/icon.svg',
   '/manifest.json',
@@ -23,8 +24,11 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // API-Anfragen immer direkt durchleiten (nicht cachen)
-  if (e.request.url.includes('googleapis.com')) return;
+  // API-Anfragen immer direkt durchleiten
+  if (e.request.url.includes('googleapis.com') ||
+      e.request.url.includes('firebaseio.com') ||
+      e.request.url.includes('firestore.googleapis.com') ||
+      e.request.url.includes('gstatic.com/firebasejs')) return;
 
   e.respondWith(
     caches.match(e.request).then(cached => {
@@ -36,6 +40,21 @@ self.addEventListener('fetch', e => {
         }
         return res;
       });
+    })
+  );
+});
+
+// ── Benachrichtigung angeklickt ──
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) {
+        if (c.url.includes(self.registration.scope) && 'focus' in c) {
+          return c.focus();
+        }
+      }
+      return clients.openWindow(self.registration.scope);
     })
   );
 });
