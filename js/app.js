@@ -8,7 +8,13 @@ const fmtTime = s  => `${s<0?'-':''}${fmt2(Math.floor(Math.abs(s)/60))}:${fmt2(M
 const esc     = s  => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 /* ── State ── */
-const S = { view:'welcome', tab:'inbox', params:{}, sessionResults:null };
+const S = {
+  view:'welcome', tab:'inbox', params:{}, sessionResults:null,
+  aiLoading:false, aiError:null,
+  focusResult:null,   // {recommendations:[{task,reason}], meta:{minutes,energy,conc}}
+  dailyPlan:null,     // string
+  decomposeResult:null, // {taskId, taskTitle, subtasks:[]}
+};
 
 /* ── Timer ── */
 class TimerVM {
@@ -127,7 +133,7 @@ const Timer=new TimerVM();
 /* ── Router ── */
 function go(view,params={}) {
   S.view=view; S.params=params;
-  if(['inbox','new','today','timer','history'].includes(view)) S.tab=view;
+  if(['inbox','new','today','timer','ki','history'].includes(view)) S.tab=view;
   if(view!=='timer') { Timer.onTick=null; }
   render();
 }
@@ -140,7 +146,7 @@ function render() {
   document.documentElement.setAttribute('data-theme',DB.getSetting('theme','light'));
   document.documentElement.setAttribute('data-font',DB.getSetting('fontSize','normal'));
   const map={welcome:vWelcome,inbox:vInbox,new:vNewTask,today:vToday,timer:vTimer,
-             history:vHistory,'edit-task':vEditTask,results:vResults,settings:vSettings,categories:vCategories};
+             ki:vKI,history:vHistory,'edit-task':vEditTask,results:vResults,settings:vSettings,categories:vCategories};
   document.getElementById('app').innerHTML=(map[S.view]||vInbox)();
   afterRender();
 }
@@ -148,6 +154,14 @@ function render() {
 function afterRender() {
   if(S.view==='today') initDnD();
   if(S.view==='timer') Timer.onTick=render;
+  if(S.view==='ki') {
+    const chatEl=document.getElementById('chat-messages');
+    if(chatEl) chatEl.scrollTop=chatEl.scrollHeight;
+    const inp=document.getElementById('chat-input');
+    if(inp) inp.addEventListener('keydown',e=>{
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();}
+    });
+  }
   if(S.view==='inbox'&&S._refocusSearch) {
     S._refocusSearch=false;
     const inp=document.querySelector('.search-input');
@@ -162,6 +176,7 @@ const TABS=[
   {id:'new',    icon:'➕',label:'Neu'},
   {id:'today',  icon:'📅',label:'Heute'},
   {id:'timer',  icon:'⏱️',label:'Timer'},
+  {id:'ki',     icon:'🤖',label:'KI-Coach'},
   {id:'history',icon:'📊',label:'Historie'},
 ];
 const tabBar=()=>`<nav class="tabbar">${TABS.map(t=>`<button class="tab${S.tab===t.id?' active':''}" data-action="go" data-view="${t.id}"><span class="tab-icon">${t.icon}</span><span class="tab-label">${t.label}</span></button>`).join('')}</nav>`;
@@ -231,6 +246,7 @@ function vInbox() {
               <span class="badge badge-cat">${esc(t.category)}</span>
               <span class="task-time">⏱ ${t.estimated_minutes} min</span>
               ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
+              ${(t.postpone_count||0)>=3?`<span class="badge badge-proc" title="${t.postpone_count}x verschoben">⚠️ ${t.postpone_count}×</span>`:''}
             </div>
           </div>
           <div class="task-actions">
@@ -349,6 +365,7 @@ function vToday() {
               </div>
             </div>
             <div class="task-actions">
+              <button class="btn btn-sm btn-ai-split" data-action="ai-split" data-id="${t.id}" title="KI: Aufgabe aufteilen">✂️</button>
               <button class="btn btn-sm btn-back-inbox" data-action="rm-today" data-id="${t.id}">← Zurück</button>
             </div>
           </div>`).join('')}
@@ -670,6 +687,17 @@ function vSettings() {
           <button class="btn btn-sm btn-secondary" data-action="reset-block">Reset</button>
         </div>
       </div>
+      <div class="card settings-card">
+        <h3 class="card-title">🤖 KI-Coach (Claude API)</h3>
+        ${AI.hasKey()
+          ?`<div class="setting-row"><span class="setting-label">API-Schlüssel</span><span class="badge badge-rec">✓ Verbunden</span></div>
+            <button class="btn btn-sm btn-secondary mt-sm" data-action="remove-ai-key">Verbindung trennen</button>`
+          :`<div class="form-group mt-sm">
+              <input type="password" id="ai-key-input" class="form-input" placeholder="sk-ant-…">
+            </div>
+            <button class="btn btn-primary btn-full" data-action="save-ai-key">API-Schlüssel speichern</button>
+            <p class="form-hint">Erhältlich unter console.anthropic.com</p>`}
+      </div>
       <div class="card settings-card danger-zone">
         <h3 class="card-title">Daten</h3>
         <button class="btn btn-danger btn-full" data-action="clear-all">Alle Daten löschen ⚠️</button>
@@ -748,6 +776,19 @@ document.addEventListener('click', e=>{
     case 'set-pri':    setToggle('set-pri','f-pri',val); break;
     case 'set-time':   setToggle('set-time','f-time',val); break;
     case 'set-status': setToggle('set-status','f-status',val); break;
+    /* ── KI-Aktionen ── */
+    case 'save-ai-key':      saveAiKey(); break;
+    case 'remove-ai-key':    DB.setSetting('anthropicKey',''); render(); break;
+    case 'send-chat':        sendChat(); break;
+    case 'clear-chat':       AI.clearChatHistory(); render(); break;
+    case 'gen-plan':         genPlan(); break;
+    case 'ai-split':         aiSplit(id); break;
+    case 'focus-go':         focusGo(); break;
+    case 'focus-reset':      S.focusResult=null; render(); break;
+    case 'add-subtask':      addSubtask(parseInt(el.dataset.idx)); break;
+    case 'accept-all-subtasks': acceptAllSubtasks(); break;
+    case 'dismiss-decompose': S.decomposeResult=null; render(); break;
+    case 'add-focus-task':   addToday(id); break;
   }
 });
 
@@ -762,10 +803,11 @@ document.addEventListener('change', e=>{
 document.addEventListener('input', e=>{
   const {action}=e.target.dataset;
   if(action==='search'){S.params.q=e.target.value;S._refocusSearch=true;render();}
-  // Sync custom time input with button group
   if(e.target.id==='f-time'){
     document.querySelectorAll('[data-action="set-time"]').forEach(b=>b.classList.toggle('active',b.dataset.val===e.target.value));
   }
+  if(e.target.id==='focus-energy'){const el=document.getElementById('focus-energy-val');if(el)el.textContent=e.target.value;}
+  if(e.target.id==='focus-conc'){const el=document.getElementById('focus-conc-val');if(el)el.textContent=e.target.value;}
 });
 
 /* ── Actions ── */
@@ -812,7 +854,9 @@ function addToday(id) {
 
 function rmToday(id) {
   const t=DB.getTasks().find(t=>t.id===id); if(!t) return;
-  t.status='later'; t.today_order=0; DB.saveTask(t); render();
+  t.status='later'; t.today_order=0;
+  t.postpone_count=(t.postpone_count||0)+1;
+  DB.saveTask(t); render();
 }
 
 function delTask(id) { if(confirm('Aufgabe wirklich löschen?')){DB.deleteTask(id);render();} }
@@ -902,6 +946,256 @@ function initDnD() {
 
   list.addEventListener('dragover',e=>e.preventDefault());
   list.addEventListener('drop',e=>e.preventDefault());
+}
+
+/* ── KI-Coach View ── */
+function vKI() {
+  const hasKey = AI.hasKey();
+  const procs  = AI.getProcrastinationWarnings();
+  const suggs  = AI.getSmartSuggestions();
+  const stats  = AI.getMotivationStats();
+  const chat   = AI.getChatHistory();
+
+  const loadingSpinner = `<div class="ai-loading"><span class="ai-spinner"></span> KI denkt nach…</div>`;
+
+  /* Setup-Screen wenn kein API-Key */
+  const setupCard = !hasKey ? `<div class="card ai-setup-card">
+    <div class="ai-setup-icon">🤖</div>
+    <h3 class="card-title">KI-Coach verbinden</h3>
+    <p class="ai-setup-text">Verbinde Step4Step mit Claude AI für intelligente Unterstützung bei Planung, Fokusmodus und Coaching.</p>
+    <div class="form-group">
+      <input type="password" id="ai-key-input" class="form-input" placeholder="sk-ant-…">
+      <p class="form-hint">API-Schlüssel: console.anthropic.com → Einstellungen speichern auch möglich.</p>
+    </div>
+    <button class="btn btn-primary btn-full" data-action="save-ai-key">Verbinden ›</button>
+  </div>` : '';
+
+  /* Motivations-Stats */
+  const statsCard = stats.thisCount > 0 ? `<div class="card ai-stats-card">
+    <div class="ai-stats-row">
+      <span class="ai-stats-num">${stats.thisCount}</span>
+      <span class="ai-stats-label">Aufgaben diese Woche</span>
+    </div>
+    ${stats.diff !== null ? `<p class="ai-stats-compare ${stats.diff>=0?'ai-stats-up':'ai-stats-down'}">${stats.diff>=0?'↑':'↓'} ${Math.abs(stats.diff)}% vs. letzte Woche</p>` : ''}
+  </div>` : '';
+
+  /* Smarte lokale Empfehlungen (immer sichtbar) */
+  const suggsCard = `<div class="card">
+    <h3 class="card-title">⚡ Nächste sinnvolle Aufgabe</h3>
+    ${suggs.length === 0
+      ? `<p class="text-muted">Keine Aufgaben in der Liste. Super – oder neue anlegen?</p>`
+      : suggs.map((t,i)=>`<div class="ai-sugg-item ${i===0?'ai-sugg-primary':''}">
+          <div class="ai-sugg-content">
+            <span class="ai-sugg-title">${esc(t.title)}</span>
+            <span class="ai-sugg-meta">${t.estimated_minutes} min · ${t.priority==='high'?'Wichtig':t.priority==='medium'?'Mittel':'Niedrig'}${(t.postpone_count||0)>0?` · ${t.postpone_count}× verschoben`:''}</span>
+          </div>
+          <button class="btn btn-sm ${i===0?'btn-primary':'btn-secondary'}" data-action="add-focus-task" data-id="${t.id}">📅</button>
+        </div>`).join('')}
+    <p class="ai-rule-hint">Maximal 3 Vorschläge · danach Pause machen ☕</p>
+  </div>`;
+
+  /* Prokrastinations-Warnungen */
+  const procsCard = procs.length > 0 ? `<div class="card ai-procs-card">
+    <h3 class="card-title">⚠️ Mehrfach verschoben (${procs.length})</h3>
+    ${procs.map(t=>`<div class="proc-item">
+      <div class="proc-content">
+        <span class="proc-title">${esc(t.title)}</span>
+        <span class="proc-count">${t.postpone_count}× verschoben</span>
+      </div>
+      ${hasKey?`<button class="btn btn-sm btn-secondary" data-action="ai-split" data-id="${t.id}">${S.aiLoading?'…':'✂️ Aufteilen'}</button>`:''}
+    </div>`).join('')}
+  </div>` : '';
+
+  /* Decompose-Ergebnis */
+  const decomposeCard = S.decomposeResult ? `<div class="card ai-decompose-card">
+    <h3 class="card-title">✂️ Aufgabe aufgeteilt: "${esc(S.decomposeResult.taskTitle)}"</h3>
+    <p class="ai-decompose-hint">Wähle Teilschritte aus, die du übernehmen möchtest:</p>
+    ${S.decomposeResult.subtasks.map((st,i)=>`<div class="decompose-item">
+      <div class="decompose-content">
+        <span class="decompose-title">${esc(st.title)}</span>
+        <span class="decompose-meta">${st.estimated_minutes} min · ${st.difficulty==='easy'?'Einfach':st.difficulty==='medium'?'Mittel':'Schwer'} · Energie: ${st.energy==='low'?'Niedrig':st.energy==='medium'?'Mittel':'Hoch'}</span>
+      </div>
+      <button class="btn btn-sm btn-primary" data-action="add-subtask" data-idx="${i}">+ Hinzufügen</button>
+    </div>`).join('')}
+    <div class="decompose-actions">
+      <button class="btn btn-secondary" data-action="dismiss-decompose">Schließen</button>
+      <button class="btn btn-primary" data-action="accept-all-subtasks">Alle übernehmen</button>
+    </div>
+  </div>` : '';
+
+  /* Fokusmodus */
+  const focusCard = hasKey ? `<div class="card">
+    <h3 class="card-title">🎯 Fokusmodus</h3>
+    ${S.focusResult
+      ? `<p class="focus-meta">Zeit: ${S.focusResult.meta.minutes} Min · Energie: ${S.focusResult.meta.energy}/10 · Konzentration: ${S.focusResult.meta.conc}/10</p>
+         ${S.focusResult.recommendations.length === 0
+           ? `<p class="text-muted">Keine passenden Aufgaben gefunden. Vielleicht eine Pause?</p>`
+           : S.focusResult.recommendations.map((r,i)=>
+               `<div class="ai-sugg-item ${i===0?'ai-sugg-primary':''}">
+                  <div class="ai-sugg-content">
+                    <span class="ai-sugg-title">${esc(r.task.title)}</span>
+                    <span class="ai-sugg-meta">${r.task.estimated_minutes} min · ${esc(r.reason)}</span>
+                  </div>
+                  <button class="btn btn-sm ${i===0?'btn-primary':'btn-secondary'}" data-action="add-focus-task" data-id="${r.task.id}">📅</button>
+                </div>`
+             ).join('')}
+         <button class="btn btn-sm btn-secondary mt-sm" data-action="focus-reset">Neu eingeben</button>`
+      : `<div class="focus-form">
+           <div class="focus-row">
+             <label class="focus-label">⏱ Zeit (Min)</label>
+             <input type="number" id="focus-min" class="form-input input-sm" value="30" min="5" max="480">
+           </div>
+           <div class="focus-row">
+             <label class="focus-label">⚡ Energie <span id="focus-energy-val">5</span>/10</label>
+             <input type="range" id="focus-energy" class="focus-range" min="1" max="10" value="5">
+           </div>
+           <div class="focus-row">
+             <label class="focus-label">🧠 Konzentration <span id="focus-conc-val">5</span>/10</label>
+             <input type="range" id="focus-conc" class="focus-range" min="1" max="10" value="5">
+           </div>
+           ${S.aiLoading
+             ? loadingSpinner
+             : `<button class="btn btn-primary btn-full" data-action="focus-go">KI fragen ›</button>`}
+         </div>`}
+  </div>` : '';
+
+  /* Tagesplan */
+  const planCard = hasKey ? `<div class="card">
+    <h3 class="card-title">📋 Tagesplan</h3>
+    ${S.dailyPlan
+      ? `<div class="ai-plan">${esc(S.dailyPlan).replace(/\n/g,'<br>')}</div>
+         <button class="btn btn-sm btn-secondary mt-sm" data-action="gen-plan">Neu erstellen</button>`
+      : `${S.aiLoading ? loadingSpinner : `<button class="btn btn-primary btn-full" data-action="gen-plan">Tagesplan erstellen</button>`}
+         <p class="form-hint">Die KI analysiert deine Aufgaben und erstellt einen persönlichen Plan.</p>`}
+  </div>` : '';
+
+  /* Chat */
+  const chatCard = hasKey ? `<div class="card ai-chat-card">
+    <h3 class="card-title">💬 Dein Coach</h3>
+    <div class="chat-messages" id="chat-messages">
+      ${chat.length === 0
+        ? `<div class="chat-welcome">
+             <p>Hallo! Ich bin dein Arbeitscoach.</p>
+             <p>Schreib mir zum Beispiel:<br><em>"Ich weiß nicht, wo ich anfangen soll."</em></p>
+           </div>`
+        : chat.map(m=>`<div class="chat-msg chat-msg-${m.role}">
+             <span class="chat-bubble">${esc(m.content).replace(/\n/g,'<br>')}</span>
+           </div>`).join('')}
+      ${S.aiLoading ? `<div class="chat-msg chat-msg-assistant"><span class="chat-bubble chat-typing">●●●</span></div>` : ''}
+    </div>
+    <div class="chat-input-row">
+      <input type="text" id="chat-input" class="form-input chat-input" placeholder="Schreib etwas…" ${S.aiLoading?'disabled':''}>
+      <button class="btn btn-primary chat-send-btn" data-action="send-chat" ${S.aiLoading?'disabled':''}>↑</button>
+    </div>
+    ${chat.length > 0 ? `<button class="btn-link mt-sm" data-action="clear-chat">Chat löschen</button>` : ''}
+  </div>` : '';
+
+  return `<div class="view">${tabBar()}
+    <div class="sticky-header">${hdr('KI-Coach')}</div>
+    <div class="content">
+      ${setupCard}
+      ${statsCard}
+      ${decomposeCard}
+      ${suggsCard}
+      ${procsCard}
+      ${focusCard}
+      ${planCard}
+      ${chatCard}
+    </div>
+  </div>`;
+}
+
+/* ── KI Action Functions ── */
+function saveAiKey() {
+  const key=(document.getElementById('ai-key-input')?.value||'').trim();
+  if(!key){alert('Bitte einen API-Schlüssel eingeben.');return;}
+  DB.setSetting('anthropicKey',key); render();
+}
+
+async function sendChat() {
+  const input=document.getElementById('chat-input');
+  const msg=(input?.value||'').trim();
+  if(!msg||S.aiLoading) return;
+
+  const history=AI.getChatHistory();
+  history.push({role:'user',content:msg});
+  AI.saveChatHistory(history);
+  S.aiLoading=true; render();
+
+  try {
+    const apiHistory=history.slice(0,-1).map(m=>({role:m.role,content:m.content}));
+    const reply=await AI.chat(apiHistory,msg);
+    history.push({role:'assistant',content:reply});
+  } catch(e) {
+    const errMsg=e.message==='NO_KEY'?'Kein API-Schlüssel konfiguriert.':e.message;
+    history.push({role:'assistant',content:`Fehler: ${errMsg}`});
+  }
+  AI.saveChatHistory(history);
+  S.aiLoading=false; render();
+}
+
+async function genPlan() {
+  if(S.aiLoading) return;
+  S.aiLoading=true; S.dailyPlan=null; render();
+  try { S.dailyPlan=await AI.getDailyPlan(); }
+  catch(e) { alert('KI-Fehler: '+e.message); }
+  S.aiLoading=false; render();
+}
+
+async function aiSplit(id) {
+  const task=DB.getTasks().find(t=>t.id===id);
+  if(!task||S.aiLoading) return;
+  S.aiLoading=true; S.decomposeResult=null; render();
+  try {
+    const subtasks=await AI.decomposeTasks(task.title,task.estimated_minutes);
+    S.decomposeResult={taskId:task.id,taskTitle:task.title,subtasks};
+    go('ki'); // KI-Tab öffnen um Ergebnis zu zeigen
+  } catch(e) { alert('KI-Fehler: '+e.message); }
+  S.aiLoading=false; render();
+}
+
+async function focusGo() {
+  if(S.aiLoading) return;
+  const minutes=parseInt(document.getElementById('focus-min')?.value)||30;
+  const energy=parseInt(document.getElementById('focus-energy')?.value)||5;
+  const conc=parseInt(document.getElementById('focus-conc')?.value)||5;
+  S.aiLoading=true; render();
+  try {
+    const recs=await AI.getFocusRecommendations(minutes,energy,conc);
+    S.focusResult={recommendations:recs,meta:{minutes,energy,conc}};
+  } catch(e) { alert('KI-Fehler: '+e.message); }
+  S.aiLoading=false; render();
+}
+
+function addSubtask(idx) {
+  if(!S.decomposeResult) return;
+  const st=S.decomposeResult.subtasks[idx]; if(!st) return;
+  DB.saveTask({
+    id:uuid(), title:st.title,
+    category:'Privat', priority:'medium',
+    estimated_minutes:st.estimated_minutes||10,
+    status:'later', recurring:false, today_order:0,
+    created_at:new Date().toISOString(),
+    done_at:null, actual_minutes:null, score_bonus:0,
+  });
+  S.decomposeResult.subtasks.splice(idx,1);
+  if(!S.decomposeResult.subtasks.length) S.decomposeResult=null;
+  render();
+}
+
+function acceptAllSubtasks() {
+  if(!S.decomposeResult) return;
+  S.decomposeResult.subtasks.forEach(st=>{
+    DB.saveTask({
+      id:uuid(), title:st.title,
+      category:'Privat', priority:'medium',
+      estimated_minutes:st.estimated_minutes||10,
+      status:'later', recurring:false, today_order:0,
+      created_at:new Date().toISOString(),
+      done_at:null, actual_minutes:null, score_bonus:0,
+    });
+  });
+  S.decomposeResult=null; render();
 }
 
 /* ── Init ── */
