@@ -43,6 +43,11 @@ const Sync = (() => {
       _db = firebase.firestore();
       _ready = true;
 
+      // Redirect-Ergebnis abfangen (nach Google-Login-Weiterleitung)
+      try {
+        await firebase.auth().getRedirectResult();
+      } catch(e) { console.warn('Redirect result:', e.message); }
+
       return new Promise(resolve => {
         firebase.auth().onAuthStateChanged(user => {
           if (user) {
@@ -61,11 +66,13 @@ const Sync = (() => {
     }
   }
 
-  /* ── Google Sign-In ── */
+  /* ── Google Sign-In via Redirect (funktioniert in PWA + iOS) ── */
   async function signIn() {
     if (!_ready) await init();
     const p = new firebase.auth.GoogleAuthProvider();
-    await firebase.auth().signInWithPopup(p);
+    // signInWithRedirect statt Popup – zuverlässig in allen Umgebungen
+    await firebase.auth().signInWithRedirect(p);
+    // Seite wird weitergeleitet – Ergebnis wird beim Zurückkehren in init() abgefangen
   }
 
   async function signOut() {
