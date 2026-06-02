@@ -1,7 +1,7 @@
 'use strict';
 
 const AI = (() => {
-  const MODEL = 'gemini-2.0-flash';
+  const MODEL = 'gemini-1.5-flash';
   const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
   function getKey() { return DB.getSetting('geminiKey', ''); }
@@ -30,7 +30,14 @@ const AI = (() => {
     );
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.error?.message || `API Fehler ${res.status}`);
+      const msg = err.error?.message || `API Fehler ${res.status}`;
+      if (res.status === 429 || msg.toLowerCase().includes('quota')) {
+        throw new Error('Quota überschritten – bitte Billing unter console.cloud.google.com aktivieren (kostenlos).');
+      }
+      if (res.status === 400 && msg.toLowerCase().includes('api key')) {
+        throw new Error('Ungültiger API-Schlüssel – bitte in den Einstellungen prüfen.');
+      }
+      throw new Error(msg);
     }
     const data = await res.json();
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
