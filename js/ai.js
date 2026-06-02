@@ -1,7 +1,7 @@
 'use strict';
 
 const AI = (() => {
-  const MODEL = 'gemini-2.0-flash';
+  const MODEL = 'gemini-2.5-flash';
   const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
   function getKey() { return DB.getSetting('geminiKey', ''); }
