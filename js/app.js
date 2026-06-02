@@ -688,15 +688,15 @@ function vSettings() {
         </div>
       </div>
       <div class="card settings-card">
-        <h3 class="card-title">🤖 KI-Coach (Claude API)</h3>
+        <h3 class="card-title">🤖 KI-Coach (Google Gemini)</h3>
         ${AI.hasKey()
-          ?`<div class="setting-row"><span class="setting-label">API-Schlüssel</span><span class="badge badge-rec">✓ Verbunden</span></div>
+          ?`<div class="setting-row"><span class="setting-label">Google AI API-Schlüssel</span><span class="badge badge-rec">✓ Verbunden</span></div>
             <button class="btn btn-sm btn-secondary mt-sm" data-action="remove-ai-key">Verbindung trennen</button>`
           :`<div class="form-group mt-sm">
-              <input type="password" id="ai-key-input" class="form-input" placeholder="sk-ant-…">
+              <input type="password" id="ai-key-input" class="form-input" placeholder="AIza…">
             </div>
             <button class="btn btn-primary btn-full" data-action="save-ai-key">API-Schlüssel speichern</button>
-            <p class="form-hint">Erhältlich unter console.anthropic.com</p>`}
+            <p class="form-hint">Kostenlos unter aistudio.google.com → „Get API key"</p>`}
       </div>
       <div class="card settings-card danger-zone">
         <h3 class="card-title">Daten</h3>
@@ -778,7 +778,7 @@ document.addEventListener('click', e=>{
     case 'set-status': setToggle('set-status','f-status',val); break;
     /* ── KI-Aktionen ── */
     case 'save-ai-key':      saveAiKey(); break;
-    case 'remove-ai-key':    DB.setSetting('anthropicKey',''); render(); break;
+    case 'remove-ai-key':    DB.setSetting('geminiKey',''); render(); break;
     case 'send-chat':        sendChat(); break;
     case 'clear-chat':       AI.clearChatHistory(); render(); break;
     case 'gen-plan':         genPlan(); break;
@@ -962,10 +962,10 @@ function vKI() {
   const setupCard = !hasKey ? `<div class="card ai-setup-card">
     <div class="ai-setup-icon">🤖</div>
     <h3 class="card-title">KI-Coach verbinden</h3>
-    <p class="ai-setup-text">Verbinde Step4Step mit Claude AI für intelligente Unterstützung bei Planung, Fokusmodus und Coaching.</p>
+    <p class="ai-setup-text">Verbinde Step4Step mit Google Gemini AI – kostenlos und ohne Kreditkarte.</p>
     <div class="form-group">
-      <input type="password" id="ai-key-input" class="form-input" placeholder="sk-ant-…">
-      <p class="form-hint">API-Schlüssel: console.anthropic.com → Einstellungen speichern auch möglich.</p>
+      <input type="password" id="ai-key-input" class="form-input" placeholder="AIza…">
+      <p class="form-hint">Kostenloser Schlüssel unter aistudio.google.com → „Get API key"</p>
     </div>
     <button class="btn btn-primary btn-full" data-action="save-ai-key">Verbinden ›</button>
   </div>` : '';
@@ -1109,7 +1109,7 @@ function vKI() {
 function saveAiKey() {
   const key=(document.getElementById('ai-key-input')?.value||'').trim();
   if(!key){alert('Bitte einen API-Schlüssel eingeben.');return;}
-  DB.setSetting('anthropicKey',key); render();
+  DB.setSetting('geminiKey',key); render();
 }
 
 async function sendChat() {

@@ -1,32 +1,39 @@
 'use strict';
 
 const AI = (() => {
-  const API_URL   = 'https://api.anthropic.com/v1/messages';
-  const MODEL_FAST  = 'claude-haiku-4-5-20251001';
-  const MODEL_SMART = 'claude-sonnet-4-6';
+  const MODEL = 'gemini-2.0-flash';
+  const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-  function getKey() { return DB.getSetting('anthropicKey', ''); }
+  function getKey() { return DB.getSetting('geminiKey', ''); }
   function hasKey() { return !!getKey(); }
 
-  /* ── Core API call ── */
-  async function _call(messages, { model = MODEL_FAST, system = '', maxTokens = 1024 } = {}) {
+  /* ── Core API call (Google Gemini) ── */
+  async function _call(messages, { system = '', maxTokens = 1024 } = {}) {
     const key = getKey();
     if (!key) throw new Error('NO_KEY');
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-        'anthropic-dangerous-direct-browser-access': 'true',
-      },
-      body: JSON.stringify({ model, max_tokens: maxTokens, system, messages }),
-    });
+
+    // Gemini nutzt "user" / "model" statt "user" / "assistant"
+    const contents = messages.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+    const body = {
+      contents,
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.7 },
+    };
+    if (system) body.system_instruction = { parts: [{ text: system }] };
+
+    const res = await fetch(
+      `${API_BASE}/${MODEL}:generateContent?key=${key}`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }
+    );
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error?.message || `API Fehler ${res.status}`);
     }
-    return (await res.json()).content[0].text;
+    const data = await res.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   }
 
   /* ── Shared task context for prompts ── */
@@ -48,7 +55,7 @@ const AI = (() => {
     ].join('\n');
   }
 
-  /* ── System prompt for the coach ── */
+  /* ── System prompt ── */
   const SYSTEM_COACH = `Du bist ein einfühlsamer Arbeitscoach für Menschen mit Neurodivergenz (ADHS, Autismus u.ä.).
 Dein Ziel: Überforderung reduzieren, Entscheidungsblockaden lösen, Handlungsfähigkeit stärken.
 Regeln:
@@ -92,18 +99,14 @@ Regeln:
     return _call([{
       role: 'user',
       content: `Erstelle einen kurzen Tagesplan basierend auf diesen Daten:\n${_taskContext()}\nMaximal 5 priorisierte Empfehlungen, je 1 Satz Begründung. Formatiere mit Nummern.`,
-    }], { model: MODEL_SMART, maxTokens: 600 });
+    }], { maxTokens: 600 });
   }
 
   /* ── Feature 8: Gesprächsmodus ── */
   async function chat(history, userMessage) {
     return _call(
       [...history, { role: 'user', content: userMessage }],
-      {
-        model: MODEL_SMART,
-        system: SYSTEM_COACH + '\n\nAktuelle Aufgaben-Daten:\n' + _taskContext(),
-        maxTokens: 500,
-      }
+      { system: SYSTEM_COACH + '\n\nAktuelle Aufgaben-Daten:\n' + _taskContext(), maxTokens: 500 }
     );
   }
 
@@ -125,10 +128,10 @@ Regeln:
       if (t.priority === 'high')   score += 30;
       if (t.priority === 'medium') score += 15;
       score += Math.min((t.postpone_count || 0) * 8, 40);
-      if (t.estimated_minutes <= 5)  score += 18; // quick wins bevorzugen
+      if (t.estimated_minutes <= 5)  score += 18;
       else if (t.estimated_minutes <= 15) score += 9;
-      if (hour < 12 && t.priority === 'high')   score += 10; // morgens: schwer
-      if (hour >= 17 && t.estimated_minutes <= 15) score += 10; // abends: kurz
+      if (hour < 12 && t.priority === 'high')    score += 10;
+      if (hour >= 17 && t.estimated_minutes <= 15) score += 10;
       return { task: t, score };
     });
     return scored.sort((a, b) => b.score - a.score).slice(0, 3).map(s => s.task);
@@ -138,16 +141,8 @@ Regeln:
   function getMotivationStats() {
     const results = DB.getResults();
     const today   = new Date();
-    const thisWeek = results.filter(r => {
-      const d = new Date(r.date);
-      const diff = (today - d) / 86400000;
-      return diff >= 0 && diff < 7;
-    });
-    const lastWeek = results.filter(r => {
-      const d = new Date(r.date);
-      const diff = (today - d) / 86400000;
-      return diff >= 7 && diff < 14;
-    });
+    const thisWeek = results.filter(r => { const d=new Date(r.date); const diff=(today-d)/86400000; return diff>=0&&diff<7; });
+    const lastWeek = results.filter(r => { const d=new Date(r.date); const diff=(today-d)/86400000; return diff>=7&&diff<14; });
     const thisCount = thisWeek.reduce((s, r) => s + r.completed, 0);
     const lastCount = lastWeek.reduce((s, r) => s + r.completed, 0);
     const diff = lastCount > 0 ? Math.round((thisCount - lastCount) / lastCount * 100) : null;
