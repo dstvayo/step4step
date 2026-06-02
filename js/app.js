@@ -1153,16 +1153,26 @@ function vKI() {
 
 /* ── KI Action Functions ── */
 function saveFbConfig() {
-  const raw=(document.getElementById('fb-config-input')?.value||'').trim();
+  let raw=(document.getElementById('fb-config-input')?.value||'').trim();
   if(!raw){alert('Bitte die Firebase-Konfiguration eingeben.');return;}
   try {
-    JSON.parse(raw); // Validierung
-    DB.setSetting('firebaseConfig',raw);
+    // Bereinigung: entfernt "const firebaseConfig = " und abschließendes Semikolon
+    raw=raw.replace(/^(?:const|var|let)\s+\w+\s*=\s*/,'').replace(/;?\s*$/,'');
+    // Akzeptiert JavaScript-Objekt-Notation UND gültiges JSON
+    // eslint-disable-next-line no-new-func
+    const obj=Function('return ('+raw+')')();
+    if(!obj||!obj.apiKey||!obj.projectId){
+      alert('Konfiguration unvollständig.\nBitte den gesamten { ... } Block aus Firebase kopieren – er muss apiKey und projectId enthalten.');
+      return;
+    }
+    DB.setSetting('firebaseConfig',JSON.stringify(obj));
     Sync.init().then(ok=>{
       if(ok) render();
-      else { render(); setTimeout(()=>Sync.signIn().then(()=>render()).catch(()=>{}),300); }
+      else { render(); setTimeout(()=>Sync.signIn().then(()=>render()).catch(e=>alert('Anmeldung fehlgeschlagen: '+e.message)),300); }
     });
-  } catch { alert('Ungültiges JSON – bitte die Firebase-Konfiguration prüfen.'); }
+  } catch(e) {
+    alert('Format nicht erkannt.\nBitte den { ... } Block direkt aus dem Firebase-Code kopieren (ohne "const firebaseConfig =").');
+  }
 }
 
 function saveAiKey() {
