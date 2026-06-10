@@ -7,6 +7,19 @@ const fmt2    = n  => String(n).padStart(2,'0');
 const fmtTime = s  => `${s<0?'-':''}${fmt2(Math.floor(Math.abs(s)/60))}:${fmt2(Math.abs(s)%60)}`;
 const esc     = s  => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
+/* ── Shared AudioContext (iOS Safari unlock) ── */
+let _sharedAC = null;
+function _getAC() {
+  if (!_sharedAC) _sharedAC = new (window.AudioContext || window.webkitAudioContext)();
+  return _sharedAC;
+}
+['touchstart','click'].forEach(ev => {
+  document.addEventListener(ev, function _unlock() {
+    try { const ac = _getAC(); if (ac.state === 'suspended') ac.resume(); } catch(e){}
+    document.removeEventListener(ev, _unlock);
+  }, {once:true, passive:true});
+});
+
 /* ── State ── */
 const S = {
   view:'welcome', tab:'inbox', params:{}, sessionResults:null,
@@ -144,13 +157,17 @@ class TimerVM {
   _beep() {
     if(!DB.getSetting('sound',true)) return;
     try {
-      const ac=new(window.AudioContext||window.webkitAudioContext)();
-      [880,1100,1320].forEach((f,i)=>{ const o=ac.createOscillator(),g=ac.createGain();
-        o.connect(g);g.connect(ac.destination);o.frequency.value=f;
-        g.gain.setValueAtTime(.4,ac.currentTime+i*.2);
-        g.gain.exponentialRampToValueAtTime(.01,ac.currentTime+i*.2+.25);
-        o.start(ac.currentTime+i*.2);o.stop(ac.currentTime+i*.2+.25);
-      });
+      const ac=_getAC();
+      const play=()=>{
+        [880,1100,1320].forEach((f,i)=>{ const o=ac.createOscillator(),g=ac.createGain();
+          o.connect(g);g.connect(ac.destination);o.frequency.value=f;
+          g.gain.setValueAtTime(.4,ac.currentTime+i*.2);
+          g.gain.exponentialRampToValueAtTime(.01,ac.currentTime+i*.2+.25);
+          o.start(ac.currentTime+i*.2);o.stop(ac.currentTime+i*.2+.25);
+        });
+      };
+      if(ac.state==='suspended') ac.resume().then(play).catch(()=>{});
+      else play();
     } catch(e){}
   }
   async _wakelock() { try{ if('wakeLock'in navigator)this.wakeLock=await navigator.wakeLock.request('screen'); }catch(e){} }
@@ -202,7 +219,6 @@ function afterRender() {
 /* ── Tab Bar ── */
 const TABS=[
   {id:'inbox',  icon:'📋',label:'Aufgaben'},
-  {id:'new',    icon:'➕',label:'Neu'},
   {id:'today',  icon:'📅',label:'Heute'},
   {id:'timer',  icon:'⏱️',label:'Timer'},
   {id:'ki',     icon:'🤖',label:'KI-Coach'},
@@ -238,6 +254,9 @@ function vInbox() {
   if(q) tasks=tasks.filter(t=>t.title.toLowerCase().includes(q.toLowerCase()));
   const pL={low:'Niedrig',medium:'Mittel',high:'Hoch'};
   const pC={low:'badge-low',medium:'badge-medium',high:'badge-high'};
+  const priOrder={high:0,medium:1,low:2};
+  tasks.sort((a,b)=>{ const pd=priOrder[a.priority]-priOrder[b.priority]; return pd||(new Date(a.created_at)-new Date(b.created_at)); });
+  const getCatColor=name=>cats.find(c=>c.name===name)?.color||'#6b7280';
   const blockMin=DB.getSetting('todayBlockMinutes',0);
   const todayTasks=DB.getTasks().filter(t=>t.status==='today');
   const todayMin=todayTasks.reduce((s,t)=>s+t.estimated_minutes,0);
@@ -265,22 +284,22 @@ function vInbox() {
       </div>
     </div>
     <div class="content">
+      <div class="new-task-row">
+        <button class="btn btn-primary btn-full" data-action="go" data-view="new">➕ Neue Aufgabe</button>
+      </div>
       ${tasks.length===0
-        ?`<div class="empty-state"><div class="empty-icon">📋</div><p>Keine Aufgaben gefunden.</p><button class="btn btn-primary" data-action="go" data-view="new">Neue Aufgabe ➕</button></div>`
-        :tasks.map(t=>`<div class="task-card">
-          <div class="task-main" data-action="edit" data-id="${t.id}">
-            <div class="task-title">${esc(t.title)}</div>
-            <div class="task-meta">
-              <span class="badge ${pC[t.priority]}">${pL[t.priority]}</span>
-              <span class="badge badge-cat">${esc(t.category)}</span>
-              <span class="task-time">⏱ ${t.estimated_minutes} min</span>
-              ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
-              ${(t.postpone_count||0)>=3?`<span class="badge badge-proc" title="${t.postpone_count}x verschoben">⚠️ ${t.postpone_count}×</span>`:''}
-            </div>
+        ?`<div class="empty-state"><div class="empty-icon">📋</div><p>Keine Aufgaben gefunden.</p></div>`
+        :tasks.map(t=>`<div class="task-card task-card-v2" style="border-top:4px solid ${getCatColor(t.category)}">
+          <div class="task-row-top" data-action="edit" data-id="${t.id}">
+            <span class="task-title-bold">${esc(t.title)}</span><span class="task-time-sep"> – ${t.estimated_minutes} min</span>
           </div>
-          <div class="task-actions">
+          <div class="task-row-bottom">
+            <span class="badge badge-cat">${esc(t.category)}</span>
+            <span class="badge ${pC[t.priority]}">${pL[t.priority]}</span>
+            ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
+            ${(t.postpone_count||0)>=3?`<span class="badge badge-proc" title="${t.postpone_count}x verschoben">⚠️</span>`:''}
             <button class="btn btn-sm btn-today" data-action="add-today" data-id="${t.id}">📅 Heute</button>
-            <button class="btn btn-sm btn-danger-sm" data-action="del-task" data-id="${t.id}">🗑️</button>
+            <button class="btn btn-sm btn-danger-sm" data-action="del-task" data-id="${t.id}">🗑️ Entfernen</button>
           </div>
         </div>`).join('')}
     </div>
@@ -406,6 +425,27 @@ function vToday() {
   </div>`;
 }
 
+/* ── Timer Clock SVG ── */
+function clockSVG(timeLeft, totalSec, phase) {
+  const r=82, circ=2*Math.PI*r;
+  const pct=totalSec>0?Math.max(0,timeLeft/totalSec):0;
+  const offset=(circ*(1-pct)).toFixed(2);
+  const cols={green:'#10b981',red:'#ef4444',blue:'#4f46e5',overtime:'#ef4444'};
+  const col=cols[phase]||'#10b981';
+  const absLeft=Math.abs(Math.round(timeLeft));
+  const mins=Math.floor(absLeft/60), secs=absLeft%60;
+  const label=(timeLeft<0?'-':'')+fmt2(mins)+':'+fmt2(secs);
+  return `<svg class="timer-clock-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="100" cy="100" r="${r}" fill="none" stroke="var(--bg3)" stroke-width="16"/>
+    <circle cx="100" cy="100" r="${r}" fill="none" stroke="${col}" stroke-width="16"
+      stroke-dasharray="${circ.toFixed(2)}" stroke-dashoffset="${offset}"
+      stroke-linecap="round" transform="rotate(-90 100 100)" style="transition:stroke-dashoffset 1s linear,stroke .5s"/>
+    <text x="100" y="115" text-anchor="middle"
+      font-size="40" font-weight="900" fill="${col}"
+      font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">${label}</text>
+  </svg>`;
+}
+
 /* ── Timer ── */
 function vTimer() {
   const t=Timer.current;
@@ -515,8 +555,7 @@ function vTimer() {
         </div>
 
         <div class="timer-display${isFinished?' timer-done':''}">
-          <div class="countdown-time">${fmtTime(Timer.timeLeft)}</div>
-          <div class="timer-progress-bar"><div class="timer-progress-fill" style="width:${pct}%"></div></div>
+          ${clockSVG(Timer.timeLeft, t.estimated_minutes*60, isFinished?'green':timerPhase)}
         </div>
 
         ${isOvertime?`<div class="overtime-dialog card">
@@ -834,6 +873,7 @@ document.addEventListener('click', e=>{
     case 'accept-all-subtasks': acceptAllSubtasks(); break;
     case 'dismiss-decompose': S.decomposeResult=null; render(); break;
     case 'add-focus-task':   addToday(id); break;
+    case 'add-all-suggestions': addAllSuggestions(); break;
   }
 });
 
@@ -921,7 +961,8 @@ function setBlock() {
 function startTimer() {
   Timer.load();
   if(!Timer.queue.length){alert('Keine Aufgaben in der Heute-Liste!');return;}
-  _requestNotifPerm(); // Benachrichtigung-Erlaubnis anfragen
+  _requestNotifPerm();
+  try { const ac=_getAC(); if(ac.state==='suspended') ac.resume().catch(()=>{}); } catch(e){}
   Timer.begin(); go('timer');
 }
 
@@ -1027,7 +1068,7 @@ function vKI() {
 
   /* Smarte lokale Empfehlungen (immer sichtbar) */
   const suggsCard = `<div class="card">
-    <h3 class="card-title">⚡ Nächste sinnvolle Aufgabe</h3>
+    <h3 class="card-title">⚡ Nächste sinnvolle Aufgaben</h3>
     ${suggs.length === 0
       ? `<p class="text-muted">Keine Aufgaben in der Liste. Super – oder neue anlegen?</p>`
       : suggs.map((t,i)=>`<div class="ai-sugg-item ${i===0?'ai-sugg-primary':''}">
@@ -1038,6 +1079,7 @@ function vKI() {
           <button class="btn btn-sm ${i===0?'btn-primary':'btn-secondary'}" data-action="add-focus-task" data-id="${t.id}">📅</button>
         </div>`).join('')}
     <p class="ai-rule-hint">Maximal 3 Vorschläge · danach Pause machen ☕</p>
+    ${suggs.length>0?`<button class="btn btn-secondary btn-full mt-sm" data-action="add-all-suggestions">📅 Alle Vorschläge in Heute-Liste übernehmen</button>`:''}
   </div>`;
 
   /* Prokrastinations-Warnungen */
@@ -1265,6 +1307,23 @@ function acceptAllSubtasks() {
     });
   });
   S.decomposeResult=null; render();
+}
+
+function addAllSuggestions() {
+  const suggs=AI.getSmartSuggestions();
+  const bMin=DB.getSetting('todayBlockMinutes',0);
+  let added=0;
+  suggs.forEach(t=>{
+    if(t.status==='today') return;
+    if(bMin){
+      const used=DB.getTasks().filter(x=>x.status==='today').reduce((s,x)=>s+x.estimated_minutes,0);
+      if(used+t.estimated_minutes>bMin) return;
+    }
+    t.status='today'; t.today_order=DB.getTasks().filter(x=>x.status==='today').length;
+    DB.saveTask(t); added++;
+  });
+  if(added>0) render();
+  else alert('Alle Vorschläge sind bereits in der Heute-Liste oder der Zeitblock ist voll.');
 }
 
 /* ── Benachrichtigungen (Feature ③) ── */

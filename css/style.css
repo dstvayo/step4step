@@ -482,6 +482,32 @@ a { color: var(--primary); text-decoration: none; }
 /* AI Split Button (Today view) */
 .btn-ai-split { background: #ede9fe; color: var(--primary); padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--fs-sm); font-weight: 600; }
 
+/* ── Timer Clock SVG ── */
+.timer-clock-svg { display: block; margin: 0 auto; width: 200px; height: 200px; }
+
+/* ── Inbox: Neue Aufgabe Button ── */
+.new-task-row { margin-bottom: 14px; }
+
+/* ── Inbox: Task Card v2 (Kategorie-Balken + 2-Zeilen-Layout) ── */
+.task-card-v2 {
+  flex-direction: column; align-items: stretch; gap: 0;
+  padding: 10px 14px 12px; overflow: hidden;
+  border-radius: var(--radius);
+}
+.task-row-top {
+  display: flex; align-items: baseline; gap: 0;
+  cursor: pointer; margin-bottom: 8px; flex-wrap: wrap;
+}
+.task-title-bold {
+  font-weight: 700; font-size: var(--fs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex-shrink: 1; min-width: 0;
+}
+.task-time-sep { font-size: var(--fs-sm); color: var(--text2); white-space: nowrap; flex-shrink: 0; }
+.task-row-bottom {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+
 /* ── Sync ── */
 .sync-dot { font-size: 16px; margin-right: 2px; opacity: .8; }
 .sync-email { font-size: var(--fs-sm); color: var(--primary); font-weight: 600; }
