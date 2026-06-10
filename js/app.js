@@ -191,7 +191,7 @@ function render() {
   }
   document.documentElement.setAttribute('data-theme',DB.getSetting('theme','light'));
   document.documentElement.setAttribute('data-font',DB.getSetting('fontSize','normal'));
-  const map={welcome:vWelcome,inbox:vInbox,new:vNewTask,today:vToday,timer:vTimer,
+  const map={welcome:vWelcome,'block-setup':vBlockSetup,inbox:vInbox,new:vNewTask,today:vToday,timer:vTimer,
              ki:vKI,history:vHistory,'edit-task':vEditTask,results:vResults,settings:vSettings,categories:vCategories};
   document.getElementById('app').innerHTML=(map[S.view]||vInbox)();
   afterRender();
@@ -244,6 +244,33 @@ function vWelcome() {
   </div></div>`;
 }
 
+/* ── Block Setup (Startup) ── */
+function vBlockSetup() {
+  const saved=DB.getSetting('todayBlockMinutes',120);
+  const presets=[30,60,90,120,180,240];
+  return `<div class="view view-block-setup">
+    <div class="block-setup-hero">
+      <div class="block-setup-logo">S4S</div>
+    </div>
+    <div class="content">
+      <div class="card block-start-card">
+        <div class="block-icon">⏰</div>
+        <h2 class="block-start-title">Wie viel Zeit hast du heute?</h2>
+        <p class="block-start-sub">Lege deinen Fokus-Zeitblock für den Tag fest.</p>
+        <div class="preset-grid">
+          ${presets.map(m=>`<button class="btn btn-toggle${saved===m?' active':''}" data-action="set-block-preset" data-val="${m}">${m<60?m+' min':m===60?'1 Std':m===90?'1½ Std':m===120?'2 Std':m===180?'3 Std':'4 Std'}</button>`).join('')}
+        </div>
+        <div class="block-custom-row">
+          <input type="number" id="block-min" class="form-input" placeholder="Minuten" min="5" max="600" value="${saved}">
+          <span class="text-muted">Minuten</span>
+        </div>
+        <button class="btn btn-primary btn-lg btn-full" data-action="set-block-start">Aufgaben anzeigen →</button>
+        <button class="btn-link block-skip-link" data-action="skip-block">Überspringen</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ── Inbox ── */
 function vInbox() {
   const cats=DB.getCategories();
@@ -262,13 +289,24 @@ function vInbox() {
   const todayMin=todayTasks.reduce((s,t)=>s+t.estimated_minutes,0);
   return `<div class="view">${tabBar()}
     <div class="sticky-header">
-      ${hdr('Aufgaben')}
+      <header class="header">
+        <div class="header-left"><span class="logo">S4S</span></div>
+        <h1 class="header-title">Aufgaben</h1>
+        <div class="header-right">
+          <button class="btn btn-sm btn-primary inbox-new-btn" data-action="go" data-view="new">➕ Neu</button>
+          ${Sync.isConnected()?'<span class="sync-dot" title="Synchronisiert">☁️</span>':''}
+          <button class="btn-icon" data-action="go" data-view="settings">⚙️</button>
+        </div>
+      </header>
+    </div>
+    <div class="content">
       ${blockMin>0?`<div class="today-stats">
         <span class="stat-item">📅 ${todayTasks.length} Aufgaben</span>
         <span class="stat-item">⏱ ${todayMin} / ${blockMin} min</span>
         <span class="stat-item ${todayMin>blockMin?'stat-over':'stat-ok'}">${blockMin-todayMin>=0?blockMin-todayMin+' min frei':Math.abs(blockMin-todayMin)+' min über'}</span>
+        <button class="btn-link" data-action="reset-block">ändern</button>
       </div>`:''}
-      <p class="sticky-hint">Wähle hier deine Aufgaben für Heute.</p>
+      <p class="scroll-hint">Wähle hier deine Aufgaben für Heute.</p>
       <div class="filters">
         <input type="search" class="search-input" placeholder="Aufgabe suchen…" value="${esc(q)}" data-action="search">
         <div class="filter-row">
@@ -282,11 +320,6 @@ function vInbox() {
           </select>
         </div>
       </div>
-    </div>
-    <div class="content">
-      <div class="new-task-row">
-        <button class="btn btn-primary btn-full" data-action="go" data-view="new">➕ Neue Aufgabe</button>
-      </div>
       ${tasks.length===0
         ?`<div class="empty-state"><div class="empty-icon">📋</div><p>Keine Aufgaben gefunden.</p></div>`
         :tasks.map(t=>`<div class="task-card task-card-v2" style="border-top:4px solid ${getCatColor(t.category)}">
@@ -299,7 +332,7 @@ function vInbox() {
             ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
             ${(t.postpone_count||0)>=3?`<span class="badge badge-proc" title="${t.postpone_count}x verschoben">⚠️</span>`:''}
             <button class="btn btn-sm btn-today" data-action="add-today" data-id="${t.id}">📅 Heute</button>
-            <button class="btn btn-sm btn-danger-sm" data-action="del-task" data-id="${t.id}">🗑️ Entfernen</button>
+            <button class="btn btn-sm btn-danger-sm" data-action="del-task" data-id="${t.id}">🗑️</button>
           </div>
         </div>`).join('')}
     </div>
@@ -829,15 +862,18 @@ document.addEventListener('click', e=>{
     case 'back':       goBack(); break;
     case 'welcome-start': {
       if(document.getElementById('hideWelcome')?.checked) DB.setSetting('hideWelcome',true);
-      go('inbox'); break;
+      go('block-setup'); break;
     }
     case 'edit':       go('edit-task',{id}); break;
     case 'add-today':  addToday(id); break;
     case 'rm-today':   rmToday(id); break;
     case 'del-task':   delTask(id); break;
     case 'save-task':  saveTask(); break;
-    case 'set-block':  setBlock(); break;
-    case 'reset-block':DB.setSetting('todayBlockMinutes',0); render(); break;
+    case 'set-block':       setBlock(); break;
+    case 'reset-block':     DB.setSetting('todayBlockMinutes',0);DB.setSetting('blockSetDate',''); render(); break;
+    case 'set-block-start': setBlockAndStart(); break;
+    case 'set-block-preset':setBlockPreset(val); break;
+    case 'skip-block':      go('inbox'); break;
     case 'start-timer':startTimer(); break;
     case 't-pause':    Timer.togglePause(); break;
     case 't-done':     Timer.markDone(); break;
@@ -955,7 +991,23 @@ function checkBlock(addMin) {
 
 function setBlock() {
   const v=parseInt(document.getElementById('block-min')?.value)||120;
-  DB.setSetting('todayBlockMinutes',v); render();
+  DB.setSetting('todayBlockMinutes',v);
+  DB.setSetting('blockSetDate',todayStr());
+  render();
+}
+
+function setBlockAndStart() {
+  const v=parseInt(document.getElementById('block-min')?.value)||120;
+  DB.setSetting('todayBlockMinutes',v);
+  DB.setSetting('blockSetDate',todayStr());
+  go('inbox');
+}
+
+function setBlockPreset(val) {
+  const n=parseInt(val);
+  const inp=document.getElementById('block-min');
+  if(inp) inp.value=n;
+  document.querySelectorAll('[data-action="set-block-preset"]').forEach(b=>b.classList.toggle('active',b.dataset.val===val));
 }
 
 function startTimer() {
@@ -1376,8 +1428,13 @@ const _origStartTimer=startTimer;
 
 /* ── Init ── */
 function init() {
-  if(DB.getSetting('hideWelcome',false)){S.view='inbox';S.tab='inbox';}
-  // Sync initialisieren wenn konfiguriert
+  if(DB.getSetting('hideWelcome',false)) {
+    const blockMin=DB.getSetting('todayBlockMinutes',0);
+    const blockDate=DB.getSetting('blockSetDate','');
+    const blockOk=blockMin>0&&blockDate===todayStr();
+    S.view=blockOk?'inbox':'block-setup';
+    S.tab='inbox';
+  }
   if(typeof Sync!=='undefined'&&Sync.hasConfig()) Sync.init().then(()=>render());
   render();
 }

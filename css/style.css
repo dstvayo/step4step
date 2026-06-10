@@ -485,8 +485,37 @@ a { color: var(--primary); text-decoration: none; }
 /* ── Timer Clock SVG ── */
 .timer-clock-svg { display: block; margin: 0 auto; width: 200px; height: 200px; }
 
-/* ── Inbox: Neue Aufgabe Button ── */
-.new-task-row { margin-bottom: 14px; }
+/* ── Block Setup (Startup) ── */
+.view-block-setup { background: var(--bg); }
+.block-setup-hero {
+  background: linear-gradient(135deg, var(--primary), #818cf8);
+  padding: 32px 24px 24px; text-align: center;
+}
+.block-setup-logo {
+  font-size: 48px; font-weight: 900; color: #fff;
+  letter-spacing: -3px; line-height: 1;
+}
+.block-start-card { text-align: center; margin-top: -1px; }
+.block-icon { font-size: 48px; margin-bottom: 8px; }
+.block-start-title { font-size: var(--fs-xl); font-weight: 900; margin-bottom: 6px; }
+.block-start-sub { font-size: var(--fs-sm); color: var(--text2); margin-bottom: 20px; }
+.preset-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px;
+}
+.preset-grid .btn-toggle { padding: 10px 6px; font-size: var(--fs-sm); text-align: center; }
+.block-custom-row {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+}
+.block-custom-row .form-input { flex: 1; text-align: center; font-size: var(--fs-lg); font-weight: 700; }
+.block-skip-link { display: block; margin-top: 12px; text-align: center; color: var(--text2); }
+
+/* ── Inbox: sticky header "Neu"-Button ── */
+.inbox-new-btn { font-size: var(--fs-sm); padding: 7px 14px; }
+
+/* ── Inbox: scroll-hint (scrollable, not sticky) ── */
+.scroll-hint {
+  padding: 8px 0 4px; font-size: var(--fs-sm); color: var(--text2);
+}
 
 /* ── Inbox: Task Card v2 (Kategorie-Balken + 2-Zeilen-Layout) ── */
 .task-card-v2 {
