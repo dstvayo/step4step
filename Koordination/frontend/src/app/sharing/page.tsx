@@ -186,7 +186,7 @@ export default function SharingPage() {
                   <p className="text-xs font-medium text-slate-400 mb-2">Deine Reaktion</p>
                   <div className="grid grid-cols-2 gap-2">
                     {REACTIONS.map((reaction) => {
-                      const myReaction = selectedMessage.reactions.find((r) => r.userId === user?.id);
+                      const myReaction = selectedMessage.reactions.find((r) => r.user.id === user?.id);
                       const active = myReaction?.reaction === reaction;
                       return (
                         <button

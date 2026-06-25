@@ -131,7 +131,7 @@ export default function GroupsPage() {
                       <p className="text-xs text-slate-500">{member.user.email}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {member.role === 'owner' && <Crown size={14} className="text-amber-400" title="Besitzer" />}
+                      {member.role === 'owner' && <span title="Besitzer"><Crown size={14} className="text-amber-400" /></span>}
                       {selectedGroup.ownerId === user?.id && member.userId !== user?.id && (
                         <button onClick={() => handleRemoveMember(selectedGroup.id, member.userId)} className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-red-500/10">Entfernen</button>
                       )}
