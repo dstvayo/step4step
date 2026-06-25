@@ -1,0 +1,252 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          Role      @default(MEMBER)
+  avatar        String?
+  phone         String?
+  language      String    @default("de")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  ownedEvents   Event[]   @relation("EventOwner")
+  ownedTasks    Task[]    @relation("TaskOwner")
+  reminders     Reminder[]
+  groupMemberships GroupMember[]
+  ownedGroups   Group[]   @relation("GroupOwner")
+  sharedMessages SharedMessage[] @relation("MessageRecipient")
+  sentMessages  SharedMessage[] @relation("MessageSender")
+  reactions     MessageReaction[]
+  eventParticipants EventParticipant[]
+  taskAssignees TaskAssignee[]
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model Group {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  ownerId     String
+  owner       User      @relation("GroupOwner", fields: [ownerId], references: [id])
+  members     GroupMember[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String   @default("member")
+  joinedAt  DateTime @default(now())
+
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+model Event {
+  id              String    @id @default(cuid())
+  title           String
+  description     String?
+  start           DateTime
+  end             DateTime
+  location        String?
+  notes           String?
+  category        String?
+  categoryColor   String?
+  recurrenceRule  String?
+  urgency         Urgency   @default(NORMAL)
+  messageType     MessageType @default(EVENT)
+  reminderMinutes Int?
+  ownerId         String
+  owner           User      @relation("EventOwner", fields: [ownerId], references: [id])
+  participants    EventParticipant[]
+  reminders       Reminder[]
+  sharedMessages  SharedMessage[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("events")
+}
+
+model EventParticipant {
+  id       String @id @default(cuid())
+  eventId  String
+  userId   String
+  status   String @default("pending")
+
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_participants")
+}
+
+enum Urgency {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum MessageType {
+  REMINDER
+  TASK
+  REQUEST
+  APPOINTMENT
+  EVENT
+  INFO
+}
+
+model Task {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  dueDate       DateTime?
+  priority      Priority  @default(MEDIUM)
+  status        TaskStatus @default(OPEN)
+  statusUpdatedAt DateTime?
+  messageType   MessageType @default(TASK)
+  ownerId       String
+  owner         User      @relation("TaskOwner", fields: [ownerId], references: [id])
+  parentId      String?
+  parent        Task?     @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks      Task[]    @relation("Subtasks")
+  assignees     TaskAssignee[]
+  eventId       String?
+  reminders     Reminder[]
+  sharedMessages SharedMessage[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  id         String   @id @default(cuid())
+  taskId     String
+  userId     String
+  assignedAt DateTime @default(now())
+  receivedAt DateTime?
+
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@map("task_assignees")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+model Reminder {
+  id          String       @id @default(cuid())
+  type        ReminderType @default(TIME)
+  triggerAt   DateTime
+  message     String?
+  sent        Boolean      @default(false)
+  escalated   Boolean      @default(false)
+  escalationCount Int      @default(0)
+  relatedEventId  String?
+  relatedTaskId   String?
+  userId      String
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event       Event?       @relation(fields: [relatedEventId], references: [id], onDelete: SetNull)
+  task        Task?        @relation(fields: [relatedTaskId], references: [id], onDelete: SetNull)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("reminders")
+}
+
+enum ReminderType {
+  TIME
+  EVENT
+  TASK
+}
+
+model SharedMessage {
+  id          String    @id @default(cuid())
+  senderId    String
+  recipientId String
+  subject     String
+  body        String
+  bodyTranslated String?
+  language    String    @default("de")
+  messageType MessageType @default(INFO)
+  channel     Channel   @default(EMAIL)
+  eventId     String?
+  taskId      String?
+  status      MessageStatus @default(PENDING)
+  reactions   MessageReaction[]
+  sentAt      DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sender      User      @relation("MessageSender", fields: [senderId], references: [id])
+  recipient   User      @relation("MessageRecipient", fields: [recipientId], references: [id])
+  event       Event?    @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  task        Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@map("shared_messages")
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  reaction  String
+  note      String?
+  createdAt DateTime @default(now())
+
+  message   SharedMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@map("message_reactions")
+}
+
+enum Channel {
+  EMAIL
+  WHATSAPP
+  IN_APP
+}
+
+enum MessageStatus {
+  PENDING
+  SENT
+  DELIVERED
+  READ
+  REACTED
+}
