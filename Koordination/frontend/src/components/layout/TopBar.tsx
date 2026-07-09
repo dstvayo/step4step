@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Bell, Plus, Menu } from 'lucide-react';
+import { Bell, Menu, BellRing, BellOff } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { usePathname } from 'next/navigation';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 const pageTitles: Record<string, string> = {
   '/': 'Dashboard',
@@ -21,8 +22,17 @@ export default function TopBar() {
   const unread = notifications.filter((n) => !n.read).length;
   const [showNotifs, setShowNotifs] = useState(false);
   const markRead = useAppStore((s) => s.markNotificationRead);
+  const { subscribed, supported, subscribe, unsubscribe } = usePushNotifications();
 
   const title = pageTitles[pathname] || pageTitles[Object.keys(pageTitles).find((k) => pathname.startsWith(k) && k !== '/') || ''] || 'Koordination';
+
+  const handlePushToggle = async () => {
+    if (subscribed) {
+      await unsubscribe();
+    } else {
+      await subscribe();
+    }
+  };
 
   return (
     <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center px-4 gap-3 shrink-0">
@@ -33,6 +43,18 @@ export default function TopBar() {
       <h1 className="font-semibold text-base text-white flex-1">{title}</h1>
 
       <div className="flex items-center gap-2">
+        {supported && (
+          <button
+            onClick={handlePushToggle}
+            title={subscribed ? 'Push-Benachrichtigungen deaktivieren' : 'Push-Benachrichtigungen aktivieren'}
+            className={`p-2 rounded-lg transition-colors ${
+              subscribed ? 'text-blue-400 hover:bg-blue-500/10' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-300'
+            }`}
+          >
+            {subscribed ? <BellRing size={18} /> : <BellOff size={18} />}
+          </button>
+        )}
+
         <div className="relative">
           <button
             onClick={() => setShowNotifs(!showNotifs)}

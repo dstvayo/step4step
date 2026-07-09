@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { remindersApi } from '@/lib/api';
-import { Plus, Bell, BellOff, Trash2, AlertCircle } from 'lucide-react';
+import { Plus, Bell, BellOff, Trash2, AlertCircle, Timer } from 'lucide-react';
 import { format, parseISO, isPast } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { Reminder } from '@/types';
+import CountdownTimer from '@/components/ui/CountdownTimer';
 
 export default function RemindersPage() {
   const { reminders, setReminders, addReminder, removeReminder } = useAppStore();
@@ -44,12 +45,20 @@ export default function RemindersPage() {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-white">{reminder.message || 'Erinnerung'}</p>
-          <p className={`text-xs mt-0.5 ${overdue ? 'text-amber-400' : 'text-slate-500'}`}>
-            {format(parseISO(reminder.triggerAt), "d. MMMM yyyy 'um' HH:mm 'Uhr'", { locale: de })}
-            {overdue && ' · Überfällig'}
-            {reminder.sent && ' · Gesendet'}
-            {reminder.escalated && ' · Eskaliert'}
-          </p>
+          <div className="flex items-center gap-2 mt-0.5">
+            <p className={`text-xs ${overdue ? 'text-amber-400' : 'text-slate-500'}`}>
+              {format(parseISO(reminder.triggerAt), "d. MMMM yyyy 'um' HH:mm 'Uhr'", { locale: de })}
+              {overdue && ' · Überfällig'}
+              {reminder.sent && ' · Gesendet'}
+              {reminder.escalated && ' · Eskaliert'}
+            </p>
+            {!reminder.sent && !overdue && (
+              <span className="flex items-center gap-1 text-xs bg-slate-800 px-2 py-0.5 rounded-full">
+                <Timer size={10} className="text-blue-400" />
+                <CountdownTimer targetDate={parseISO(reminder.triggerAt)} compact />
+              </span>
+            )}
+          </div>
           {reminder.event && <p className="text-xs text-blue-400 mt-0.5">📅 {reminder.event.title}</p>}
           {reminder.task && <p className="text-xs text-purple-400 mt-0.5">✅ {reminder.task.title}</p>}
           {reminder.escalationCount > 0 && <p className="text-xs text-orange-400 mt-0.5">{reminder.escalationCount}x eskaliert</p>}

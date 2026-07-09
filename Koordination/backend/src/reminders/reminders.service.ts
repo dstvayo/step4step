@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationsGateway } from '../notifications/notifications.gateway';
+import { PushService } from '../notifications/push.service';
 import { CreateReminderDto } from './dto/reminder.dto';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class RemindersService {
   constructor(
     private prisma: PrismaService,
     private notifications: NotificationsGateway,
+    private push: PushService,
   ) {}
 
   async create(userId: string, dto: CreateReminderDto) {
@@ -58,12 +60,20 @@ export class RemindersService {
     });
 
     for (const reminder of dueReminders) {
+      const msg = reminder.message || 'Erinnerung';
       await this.notifications.sendReminder(reminder.userId, {
         id: reminder.id,
-        message: reminder.message || 'Erinnerung',
+        message: msg,
         triggerAt: reminder.triggerAt,
         relatedEventId: reminder.relatedEventId,
         relatedTaskId: reminder.relatedTaskId,
+      });
+      await this.push.sendToUser(reminder.userId, {
+        title: '⏰ Koordination',
+        body: msg,
+        tag: `reminder-${reminder.id}`,
+        url: reminder.relatedEventId ? '/calendar' : reminder.relatedTaskId ? '/tasks' : '/reminders',
+        requireInteraction: true,
       });
       await this.prisma.reminder.update({ where: { id: reminder.id }, data: { sent: true } });
     }
@@ -76,12 +86,20 @@ export class RemindersService {
       where: { sent: true, escalated: false, triggerAt: { lte: fifteenMinutesAgo }, escalationCount: { lt: 3 } },
     });
     for (const reminder of overdue) {
+      const escalationMsg = `[Eskalation] ${reminder.message || 'Erinnerung nicht bestätigt'}`;
       await this.notifications.sendReminder(reminder.userId, {
         id: reminder.id,
-        message: `[Eskalation] ${reminder.message || 'Erinnerung nicht bestätigt'}`,
+        message: escalationMsg,
         triggerAt: reminder.triggerAt,
         relatedEventId: reminder.relatedEventId,
         relatedTaskId: reminder.relatedTaskId,
+      });
+      await this.push.sendToUser(reminder.userId, {
+        title: '🚨 Koordination – Eskalation',
+        body: escalationMsg,
+        tag: `reminder-escalation-${reminder.id}`,
+        url: '/reminders',
+        requireInteraction: true,
       });
       await this.prisma.reminder.update({
         where: { id: reminder.id },
