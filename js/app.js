@@ -63,10 +63,14 @@ class TimerVM {
     if(!this.queue.length) { this.current=null; this.state='ALL_DONE'; this._dropWL(); this._ping(); return; }
     this.current=this.queue.shift();
     this.timeLeft=this.current.estimated_minutes*60;
-    this.intro=5; this.startedAt=Date.now(); this.state='INTRO';
-    this._pausedSec=0; this._pauseStartedAt=null; this._notified=false;
+    this.intro=10; this._pausedSec=0; this._pauseStartedAt=null; this._notified=false;
+    this.state='READY';
     this._saveTimerState();
-    this._wakelock(); this._start();
+    this._wakelock(); this._ping();
+  }
+  startTask() {
+    if(this.state!=='READY') return;
+    this.startedAt=Date.now(); this.state='INTRO'; this._start(); this._ping();
   }
   _start() { this._iv=setInterval(()=>this._tick(),1000); }
   _stop()  { clearInterval(this._iv); this._iv=null; }
@@ -80,14 +84,13 @@ class TimerVM {
     },1000);
   }
   _tick() {
-    if(!this.current||this.state==='PAUSED') return;
-    // Zeit aus Timestamp berechnen – funktioniert auch nach Hintergrund-Pause
+    if(!this.current||this.state==='PAUSED'||this.state==='READY') return;
     const elapsed=(Date.now()-this.startedAt)/1000 - this._pausedSec;
-    if(elapsed<5) {
-      this.intro=Math.max(0,Math.ceil(5-elapsed));
+    if(elapsed<10) {
+      this.intro=Math.max(0,Math.ceil(10-elapsed));
       this.state='INTRO'; this._ping(); return;
     }
-    const taskElapsed=elapsed-5;
+    const taskElapsed=elapsed-10;
     const total=this.current.estimated_minutes*60;
     const newLeft=total-taskElapsed;
     if(newLeft>0) {
@@ -542,6 +545,39 @@ function vTimer() {
     </div>`;
   }
 
+  /* READY — Aufgabe vorzeigen, User bestätigt Start */
+  if(Timer.state==='READY') {
+    const cats=DB.getCategories();
+    const catColor=cats.find(c=>c.name===t?.category)?.color||'#6b7280';
+    return `<div class="view">${tabBar()}${hdr('Timer')}
+      <div class="content center-content">
+        <div class="ready-card card" style="border-top:4px solid ${catColor};width:100%">
+          <div class="ready-icon">🎯</div>
+          <h2 class="ready-title">${esc(t?.title||'')}</h2>
+          <div class="task-meta" style="justify-content:center;margin-bottom:16px">
+            <span class="badge badge-cat">${esc(t?.category||'')}</span>
+            <span class="badge">${t?.estimated_minutes||0} min geplant</span>
+            ${t?.recurring?'<span class="badge badge-rec">🔄</span>':''}
+          </div>
+          <p class="ready-hint">Mache dich bereit für diese Aufgabe und klicke auf <strong>Start</strong> wenn du bereit bist.</p>
+          <p class="ready-sub">Du kannst jetzt zum Ort der Aufgabe gehen, Materialien holen oder dich vorbereiten.</p>
+        </div>
+        <div class="timer-stats">
+          <span>✓ ${Timer.done.length} erledigt</span>
+          <span>◎ ${Timer.queue.length+1} verbleibend</span>
+          <span>⊘ ${Timer.skipped.length} übersprungen</span>
+        </div>
+      </div>
+      <div class="footer-fixed">
+        <div class="timer-buttons">
+          <button class="btn btn-secondary" data-action="t-later">↓ Später</button>
+          <button class="btn btn-warning" data-action="t-skip">⏭ Überspringen</button>
+          <button class="btn btn-primary btn-lg" data-action="t-start-ready">▶ Start</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
   /* ACTIVE (INTRO / RUNNING / PAUSED / OVERTIME / FINISHED) */
   const isIntro=Timer.state==='INTRO';
   const isPaused=Timer.state==='PAUSED';
@@ -875,6 +911,7 @@ document.addEventListener('click', e=>{
     case 'set-block-preset':setBlockPreset(val); break;
     case 'skip-block':      go('inbox'); break;
     case 'start-timer':startTimer(); break;
+    case 't-start-ready': Timer.startTask(); break;
     case 't-pause':    Timer.togglePause(); break;
     case 't-done':     Timer.markDone(); break;
     case 't-skip':     Timer.skipTask(); break;

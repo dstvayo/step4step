@@ -485,6 +485,13 @@ a { color: var(--primary); text-decoration: none; }
 /* ── Timer Clock SVG ── */
 .timer-clock-svg { display: block; margin: 0 auto; width: 200px; height: 200px; }
 
+/* ── Timer: Ready State ── */
+.ready-card { text-align: center; padding: 24px 20px; }
+.ready-icon { font-size: 52px; margin-bottom: 12px; }
+.ready-title { font-size: var(--fs-xl); font-weight: 900; margin-bottom: 10px; line-height: 1.25; }
+.ready-hint { font-size: var(--fs); color: var(--text); margin-bottom: 8px; line-height: 1.5; }
+.ready-sub  { font-size: var(--fs-sm); color: var(--text2); line-height: 1.5; }
+
 /* ── Block Setup (Startup) ── */
 .view-block-setup { background: var(--bg); }
 .block-setup-hero {
