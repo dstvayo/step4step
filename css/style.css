@@ -21,6 +21,11 @@
   --warning: #9A6212;
   --danger:  #B83A3A;             /* nur funktional: abgelaufen, löschen */
   --border:  #C9D6E3;
+  /* Prioritäten (funktional, bewusst außerhalb der CD-Palette) */
+  --pri-urgent: #2563EB;
+  --pri-high:   #DC2626;
+  --pri-medium: #EAB308;
+  --pri-low:    #16A34A;
   --radius:  10px;
   --radius-sm: 6px;
   --shadow:  none;
@@ -168,9 +173,19 @@ body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbin
   display: inline-flex; align-items: center;
   padding: 2px 8px; border-radius: 20px; font-size: var(--fs-sm); font-weight: 600;
 }
-.badge-low    { background: var(--tint); color: var(--accent); }
-.badge-medium { background: var(--secondary); color: #fff; }
-.badge-high   { background: var(--primary); color: #fff; }
+/* Prioritäten – bewusst kräftig, damit sie auf einen Blick erkennbar sind */
+.badge-urgent { background: var(--pri-urgent); color: #fff; }
+.badge-high   { background: var(--pri-high);   color: #fff; }
+.badge-medium { background: var(--pri-medium); color: #3B2A00; }
+.badge-low    { background: var(--pri-low);    color: #fff; }
+.pri-card { border: 2px solid var(--pri-c); border-left-width: 8px; }
+.pri-urgent { --pri-c: var(--pri-urgent); }
+.pri-high   { --pri-c: var(--pri-high); }
+.pri-medium { --pri-c: var(--pri-medium); }
+.pri-low    { --pri-c: var(--pri-low); }
+.btn-toggle.pri-toggle.active { background: var(--pri-c); color: #fff; }
+.btn-toggle.pri-toggle.pri-medium.active { color: #3B2A00; }
+.cat-dot-sm { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; flex-shrink: 0; }
 .badge-cat    { background: var(--bg3); color: var(--text2); }
 .badge-rec    { background: var(--tint); color: var(--accent); }
 .badge-today  { background: var(--tint); color: var(--accent); padding: 4px 10px; border-radius: 20px; font-size: var(--fs-sm); font-weight: 700; }

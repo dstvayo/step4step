@@ -1,13 +1,13 @@
 'use strict';
 
 /* ── Punktesystem ──
-   Punkte je Aufgabe = Priorität (1–3) + Aufwand (0–2) + Dauer (1 je angefangene 15 min, max. 4)
+   Punkte je Aufgabe = Priorität (1–4) + Aufwand (0–2) + Dauer (1 je angefangene 15 min, max. 4)
    Pünktlich erledigt  → volle Punkte
    Über der Zeit       → halbe Punkte (aufgerundet)
    Übersprungen/später → 0 Punkte (kein Abzug)
    Ganze Heute-Liste erledigt → +25 % Bonus auf die möglichen Punkte des Blocks */
 const Points = (() => {
-  const PRI  = { low: 1, medium: 2, high: 3 };
+  const PRI  = { low: 1, medium: 2, high: 3, urgent: 4 };
   const DIFF = { easy: 0, medium: 1, hard: 2 };
   const LEVEL_STEP = 25;
   const BONUS_RATE = 0.25;

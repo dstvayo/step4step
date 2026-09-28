@@ -60,17 +60,17 @@ const AI = (() => {
 
   /* ── Alle offenen Aufgaben (Heute + Inbox), wichtigste zuerst ── */
   const OPEN_STATUSES = ['today', 'later', 'skipped'];
-  const PRI_ORDER = { high: 0, medium: 1, low: 2 };
+  const PRI_ORDER = { urgent: 0, high: 1, medium: 2, low: 3 };
   function _openTasks() {
     return DB.getTasks()
       .filter(t => OPEN_STATUSES.includes(t.status))
       .sort((a, b) =>
         (a.status === 'today' ? 0 : 1) - (b.status === 'today' ? 0 : 1) ||
         (a.status === 'today' ? (a.today_order || 0) - (b.today_order || 0) : 0) ||
-        (PRI_ORDER[a.priority] ?? 1) - (PRI_ORDER[b.priority] ?? 1) ||
+        (PRI_ORDER[a.priority] ?? 2) - (PRI_ORDER[b.priority] ?? 2) ||
         (b.postpone_count || 0) - (a.postpone_count || 0));
   }
-  const PRI_DE = { high: 'hoch', medium: 'mittel', low: 'niedrig' };
+  const PRI_DE = { urgent: 'dringend', high: 'hoch', medium: 'mittel', low: 'niedrig' };
   function _taskLine(t) {
     return `"${t.title}" (${t.estimated_minutes} min, Priorität ${PRI_DE[t.priority] || t.priority}, ${t.category}` +
       `${t.recurring ? ', wiederkehrend' : ''}${t.postpone_count ? `, ${t.postpone_count}x verschoben` : ''})`;
@@ -169,12 +169,13 @@ Regeln:
     const hour = new Date().getHours();
     const scored = tasks.map(t => {
       let score = 0;
+      if (t.priority === 'urgent') score += 45;
       if (t.priority === 'high')   score += 30;
       if (t.priority === 'medium') score += 15;
       score += Math.min((t.postpone_count || 0) * 8, 40);
       if (t.estimated_minutes <= 5)  score += 18;
       else if (t.estimated_minutes <= 15) score += 9;
-      if (hour < 12 && t.priority === 'high')    score += 10;
+      if (hour < 12 && ['urgent','high'].includes(t.priority)) score += 10;
       if (hour >= 17 && t.estimated_minutes <= 15) score += 10;
       return { task: t, score };
     });

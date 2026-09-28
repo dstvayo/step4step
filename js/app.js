@@ -21,6 +21,13 @@ function _getAC() {
   }, {once:true, passive:true});
 });
 
+/* ── Prioritäten: Blau = Dringend, Rot = Hoch, Gelb = Mittel, Grün = Niedrig ── */
+const PRIOS=['urgent','high','medium','low'];
+const PRI_LABEL={urgent:'Dringend',high:'Hoch',medium:'Mittel',low:'Niedrig'};
+const PRI_ORDER={urgent:0,high:1,medium:2,low:3};
+const priBadge=(t,text)=>`<span class="badge badge-${PRIOS.includes(t.priority)?t.priority:'medium'}">${text??PRI_LABEL[t.priority]??'Mittel'}</span>`;
+const priClass=t=>'pri-'+(PRIOS.includes(t.priority)?t.priority:'medium');
+
 /* ── State ── */
 const S = {
   view:'welcome', tab:'inbox', params:{}, sessionResults:null,
@@ -349,10 +356,7 @@ function vInbox() {
   if(fCat!=='all') tasks=tasks.filter(t=>t.category===fCat);
   if(fPri!=='all') tasks=tasks.filter(t=>t.priority===fPri);
   if(q) tasks=tasks.filter(t=>t.title.toLowerCase().includes(q.toLowerCase()));
-  const pL={low:'Niedrig',medium:'Mittel',high:'Hoch'};
-  const pC={low:'badge-low',medium:'badge-medium',high:'badge-high'};
-  const priOrder={high:0,medium:1,low:2};
-  tasks.sort((a,b)=>{ const pd=priOrder[a.priority]-priOrder[b.priority]; return pd||(new Date(a.created_at)-new Date(b.created_at)); });
+  tasks.sort((a,b)=>{ const pd=(PRI_ORDER[a.priority]??2)-(PRI_ORDER[b.priority]??2); return pd||(new Date(a.created_at)-new Date(b.created_at)); });
   const getCatColor=name=>cats.find(c=>c.name===name)?.color||'#6b7280';
   const blockMin=DB.getSetting('todayBlockMinutes',0);
   const todayTasks=DB.getTasks().filter(t=>t.status==='today');
@@ -370,7 +374,7 @@ function vInbox() {
       </header>
     </div>
     <div class="content">
-      ${startBanners()}
+      ${updateBanner()}
       ${blockMin>0?`<div class="today-stats">
         <span class="stat-item">📅 ${todayTasks.length} Aufgaben</span>
         <span class="stat-item">⏱ ${todayMin} / ${blockMin} min</span>
@@ -387,20 +391,20 @@ function vInbox() {
           </select>
           <select class="select-sm" data-action="fpri">
             <option value="all" ${fPri==='all'?'selected':''}>Alle Prioritäten</option>
-            ${['low','medium','high'].map(p=>`<option value="${p}" ${fPri===p?'selected':''}>${pL[p]}</option>`).join('')}
+            ${PRIOS.map(p=>`<option value="${p}" ${fPri===p?'selected':''}>${PRI_LABEL[p]}</option>`).join('')}
           </select>
         </div>
       </div>
       ${DB.getDoneLog().length?`<button class="btn-link archive-link" data-action="go" data-view="archive">🗂 Archiv – erledigte Aufgaben wieder verwenden ›</button>`:''}
       ${tasks.length===0
         ?`<div class="empty-state"><div class="empty-icon">📋</div><p>Keine Aufgaben gefunden.</p></div>`
-        :tasks.map(t=>`<div class="task-card task-card-v2" style="border-top:4px solid ${getCatColor(t.category)}">
+        :tasks.map(t=>`<div class="task-card task-card-v2 pri-card ${priClass(t)}">
           <div class="task-row-top" data-action="edit" data-id="${t.id}">
             <span class="task-title-bold">${esc(t.title)}</span><span class="task-time-sep"> – ${t.estimated_minutes} min</span>
           </div>
           <div class="task-row-bottom">
-            <span class="badge badge-cat">${esc(t.category)}</span>
-            <span class="badge ${pC[t.priority]}">${pL[t.priority]}</span>
+            ${priBadge(t)}
+            <span class="badge badge-cat"><span class="cat-dot-sm" style="background:${getCatColor(t.category)}"></span>${esc(t.category)}</span>
             ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
             ${(t.postpone_count||0)>=3?`<span class="badge badge-proc" title="${t.postpone_count}x verschoben">⚠️</span>`:''}
             <button class="btn btn-sm btn-today" data-action="add-today" data-id="${t.id}">📅 Heute</button>
@@ -419,7 +423,6 @@ function vNewTask(task=null) {
   const diff=t.difficulty||'medium';
   const dL={easy:'Leicht',medium:'Mittel',hard:'Schwer'};
   const times=[5,10,15,30,45,60];
-  const pL={low:'Niedrig',medium:'Mittel',high:'Hoch'};
   S._estApplied=null;
   return `<div class="view">${tabBar()}
     ${hdr(isEdit?'Bearbeiten':'Neue Aufgabe',isEdit)}
@@ -443,7 +446,7 @@ function vNewTask(task=null) {
         <div class="form-group">
           <label class="form-label">Priorität</label>
           <div class="btn-group">
-            ${['low','medium','high'].map(p=>`<button type="button" class="btn btn-toggle${t.priority===p?' active':''}" data-action="set-pri" data-val="${p}">${pL[p]}</button>`).join('')}
+            ${[...PRIOS].reverse().map(p=>`<button type="button" class="btn btn-toggle pri-toggle pri-${p}${t.priority===p?' active':''}" data-action="set-pri" data-val="${p}">${PRI_LABEL[p]}</button>`).join('')}
           </div>
           <input type="hidden" id="f-pri" value="${t.priority}">
         </div>
@@ -462,7 +465,6 @@ function vNewTask(task=null) {
           <input type="number" id="f-time" class="form-input mt-sm" placeholder="Benutzerdefiniert (min)" value="${t.estimated_minutes}" min="1" max="480">
           <div id="est-hint">${estHint(t.title,t.category,t.estimated_minutes)}</div>
         </div>
-        <div class="points-preview" id="pts-preview">${ptsPreview(t)}</div>
         <div class="form-group">
           <label class="form-label">Wann?</label>
           <div class="btn-group">
@@ -480,6 +482,7 @@ function vNewTask(task=null) {
           <button type="button" class="btn btn-secondary" data-action="back">Abbrechen</button>
           <button type="button" class="btn btn-primary" data-action="save-task">${isEdit?'Speichern ✓':'Aufgabe anlegen ✓'}</button>
         </div>
+        <div class="points-preview" id="pts-preview">${ptsPreview(t)}</div>
       </form>
     </div>
   </div>`;
@@ -545,7 +548,7 @@ function vArchive() {
       <div class="filters"><input type="search" class="search-input" placeholder="Im Archiv suchen…" value="${esc(S.params.aq||'')}" data-action="arch-search"></div>
       ${items.length===0
         ?`<div class="empty-state"><div class="empty-icon">🗂</div><p>${q?'Nichts gefunden.':'Noch keine erledigten Aufgaben.'}</p></div>`
-        :items.map(a=>`<div class="task-card task-card-v2" style="border-top:4px solid ${catColor(a.category)}">
+        :items.map(a=>`<div class="task-card task-card-v2 pri-card ${priClass(a)}">
           <div class="task-row-top"><span class="task-title-bold">${esc(a.title)}</span><span class="task-time-sep"> – ${a.learned} min</span></div>
           <div class="archive-meta">zuletzt ${a.lastActual} min · ${a.count}× erledigt · ${fmtD(a.lastDate)}${openKeys.has(a.key)?' · <strong>bereits offen</strong>':''}</div>
           <div class="task-row-bottom">
@@ -584,7 +587,6 @@ function vToday() {
   const totalMin=tasks.reduce((s,t)=>s+t.estimated_minutes,0);
   const blockMin=DB.getSetting('todayBlockMinutes',0);
   const noBlock=blockMin===0;
-  const pC={low:'badge-low',medium:'badge-medium',high:'badge-high'};
   const pm=Points.blockMax(tasks);
   return `<div class="view">${tabBar()}
     <div class="sticky-header">
@@ -609,12 +611,12 @@ function vToday() {
     <div class="content" id="today-list">
       ${tasks.length===0
         ?`<div class="empty-state"><div class="empty-icon">📅</div><p>Noch keine Aufgaben für heute.</p><p>Gehe zu <strong>Aufgaben</strong> und füge Aufgaben hinzu.</p></div>`
-        :tasks.map((t,i)=>`<div class="task-card draggable" data-id="${t.id}" data-i="${i}">
+        :tasks.map((t,i)=>`<div class="task-card draggable pri-card ${priClass(t)}" data-id="${t.id}" data-i="${i}">
             <div class="drag-handle" aria-label="Verschieben">⠿</div>
             <div class="task-main">
               <div class="task-title">${esc(t.title)}</div>
               <div class="task-meta">
-                <span class="badge ${pC[t.priority]}">${t.estimated_minutes} min</span>
+                ${priBadge(t,`${PRI_LABEL[t.priority]??'Mittel'} · ${t.estimated_minutes} min`)}
                 <span class="badge badge-cat">${esc(t.category)}</span>
                 <span class="badge badge-pts">⭐ ${Points.base(t)}</span>
                 ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
@@ -733,7 +735,7 @@ function vTimer() {
     const catColor=cats.find(c=>c.name===t?.category)?.color||'#6b7280';
     return `<div class="view">${tabBar()}${hdr('Timer')}
       <div class="content center-content">
-        <div class="ready-card card" style="border-top:4px solid ${catColor};width:100%">
+        <div class="ready-card card pri-card ${priClass(t||{})}" style="width:100%">
           <div class="ready-icon">🎯</div>
           <h2 class="ready-title">${esc(t?.title||'')}</h2>
           <div class="task-meta" style="justify-content:center;margin-bottom:16px">
@@ -965,7 +967,7 @@ function vHistory() {
           <summary>ℹ️ So bekommst du Punkte</summary>
           <p>Jede Aufgabe bringt <strong>Priorität + Aufwand + Dauer</strong>:</p>
           <ul>
-            <li>Priorität: niedrig 1 · mittel 2 · hoch 3</li>
+            <li>Priorität: niedrig 1 · mittel 2 · hoch 3 · dringend 4</li>
             <li>Aufwand: leicht 0 · mittel 1 · schwer 2</li>
             <li>Dauer: 1 Punkt je angefangene 15 min (max. 4)</li>
           </ul>
@@ -1572,7 +1574,7 @@ function vKI() {
       : suggs.map((t,i)=>`<div class="ai-sugg-item ${i===0?'ai-sugg-primary':''}">
           <div class="ai-sugg-content">
             <span class="ai-sugg-title">${esc(t.title)}</span>
-            <span class="ai-sugg-meta">${t.estimated_minutes} min · ${t.priority==='high'?'Wichtig':t.priority==='medium'?'Mittel':'Niedrig'}${(t.postpone_count||0)>0?` · ${t.postpone_count}× verschoben`:''}</span>
+            <span class="ai-sugg-meta">${t.estimated_minutes} min · ${PRI_LABEL[t.priority]??'Mittel'}${(t.postpone_count||0)>0?` · ${t.postpone_count}× verschoben`:''}</span>
           </div>
           <button class="btn btn-sm ${i===0?'btn-primary':'btn-secondary'}" data-action="add-focus-task" data-id="${t.id}">📅</button>
         </div>`).join('')}
