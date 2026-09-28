@@ -1743,7 +1743,7 @@ function _sendTimerNotification(title) {
   navigator.serviceWorker.ready.then(reg=>{
     reg.showNotification('⏰ Zeit abgelaufen!',{
       body:`"${title}" – Erledigt oder weiter?`,
-      icon:'/icons/icon-192.png', badge:'/icons/icon-192.png',
+      icon:'icons/icon-192.png', badge:'icons/icon-192.png',
       tag:'s4s-timer', requireInteraction:true,
       vibrate:[200,100,200],
     });

@@ -1,19 +1,19 @@
-const CACHE = 's4s-v7';
+const CACHE = 's4s-v8';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/css/style.css',
-  '/js/db.js',
-  '/js/estimate.js',
-  '/js/points.js',
-  '/js/backup.js',
-  '/js/ai.js',
-  '/js/sync.js',
-  '/js/app.js',
-  '/icons/icon.svg',
-  '/icons/icon-192.png',
-  '/icons/apple-touch-icon.png',
-  '/manifest.json',
+  './',
+  './index.html',
+  './css/style.css',
+  './js/db.js',
+  './js/estimate.js',
+  './js/points.js',
+  './js/backup.js',
+  './js/ai.js',
+  './js/sync.js',
+  './js/app.js',
+  './icons/icon.svg',
+  './icons/icon-192.png',
+  './icons/apple-touch-icon.png',
+  './manifest.json',
 ];
 
 self.addEventListener('install', e => {
