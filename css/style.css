@@ -30,6 +30,8 @@
   --radius-sm: 6px;
   --shadow:  none;
   --tab-h:   56px;
+  --head-h:  52px;
+  --top-h:   calc(var(--head-h) + var(--tab-h));   /* Kopfleiste + Menüleiste */
 
   /* Schrift: Basisgrößen je Bildschirm, --scale aus der Einstellung A / A+ / A++ */
   --scale: 1;
@@ -75,7 +77,6 @@ a { color: var(--accent); text-decoration: none; }
 
 /* ── Tab Bar ── */
 .tabbar {
-  position: sticky; top: 0; z-index: 100;
   display: flex; align-items: stretch;
   background: var(--bg2); border-bottom: 1px solid var(--border);
   height: var(--tab-h);
@@ -89,14 +90,23 @@ a { color: var(--accent); text-decoration: none; }
 .tab-icon { font-size: 20px; line-height: 1; }
 .tab-label { font-size: min(var(--fs-sm), 14px); font-weight: 600; white-space: nowrap; }
 
-/* ── Header ── */
-.sticky-header { position: sticky; top: var(--tab-h); z-index: 99; background: var(--bg); }
+/* ── Kopfleiste + Menüleiste (bleiben beim Scrollen oben) ── */
+.app-top { position: sticky; top: 0; z-index: 100; }
+.sticky-header { position: sticky; top: var(--top-h); z-index: 99; background: var(--bg); }
 .header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 16px; background: var(--bg2);
-  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  height: var(--head-h); padding: 0 12px 0 16px; background: var(--bg2);
 }
-.header-title { font-size: var(--fs-lg); font-weight: 700; color: #fff; }
+.header-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.header-left .logo-img { width: 32px; height: 32px; flex-shrink: 0; }
+.header-user {
+  font-size: var(--fs-lg); font-weight: 700; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.header-back { margin-left: -8px; margin-right: -6px; font-size: 26px; padding: 2px 6px; }
+.header-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.header-title { font-size: var(--fs); font-weight: 600; color: rgba(255,255,255,.85); white-space: nowrap; }
+.header-settings { font-size: 20px; padding: 4px 6px; }
 .logo { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-lg); font-weight: 700; color: #fff; }
 .logo-img { width: 30px; height: 30px; flex-shrink: 0; }
 /* Start-Logo: auf dem Handy dezent, auf großen Bildschirmen etwas größer */
@@ -557,8 +567,9 @@ body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbin
 .block-custom-row .form-input { flex: 1; text-align: center; font-size: var(--fs-lg); font-weight: 700; }
 .block-skip-link { display: block; margin-top: 12px; text-align: center; color: var(--text2); }
 
-/* ── Inbox: sticky header "Neu"-Button ── */
-.inbox-new-btn { font-size: var(--fs-sm); padding: 7px 14px; }
+/* ── Aufgaben: Hinweis + „Neue Aufgabe“ ── */
+.inbox-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.inbox-new-btn { font-size: var(--fs-sm); padding: 8px 14px; flex-shrink: 0; }
 
 /* ── Inbox: scroll-hint (scrollable, not sticky) ── */
 .scroll-hint {

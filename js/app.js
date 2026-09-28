@@ -274,8 +274,23 @@ const TABS=[
   {id:'history',icon:'📊',label:'Historie'},
 ];
 const tabBar=()=>`<nav class="tabbar">${TABS.map(t=>`<button class="tab${S.tab===t.id?' active':''}" data-action="go" data-view="${t.id}"><span class="tab-icon">${t.icon}</span><span class="tab-label">${t.label}</span></button>`).join('')}</nav>`;
-const LOGO_SM=`<span class="logo"><img class="logo-img" src="icons/icon.svg" alt="">S4S</span>`;
-const hdr=(title,back=false)=>`<header class="header"><div class="header-left">${back?`<button class="btn-icon" data-action="back">‹</button>`:LOGO_SM}</div><h1 class="header-title">${title}</h1><div class="header-right">${Sync.isConnected()?'<span class="sync-dot" title="Synchronisiert">☁️</span>':''}<button class="btn-icon" data-action="go" data-view="settings">⚙️</button></div></header>`;
+const userName=()=>DB.getSetting('userName','')||'Step4Step';
+/* Kopfleiste (links Logo + Name, rechts Seitenname) und darunter die Menüleiste – bleiben oben stehen */
+const hdr=(title,back=false)=>`<div class="app-top">
+  <header class="header">
+    <div class="header-left">
+      ${back?`<button class="btn-icon header-back" data-action="back" aria-label="Zurück">‹</button>`:''}
+      <img class="logo-img" src="icons/icon.svg" alt="Step4Step">
+      <span class="header-user">${esc(userName())}</span>
+    </div>
+    <div class="header-right">
+      <h1 class="header-title">${title}</h1>
+      ${Sync.isConnected()?'<span class="sync-dot" title="Synchronisiert">☁️</span>':''}
+      <button class="btn-icon header-settings" data-action="go" data-view="settings" aria-label="Einstellungen">⚙️</button>
+    </div>
+  </header>
+  ${tabBar()}
+</div>`;
 
 /* ── Hinweis: neue Version geladen ── */
 function updateBanner() {
@@ -361,18 +376,7 @@ function vInbox() {
   const blockMin=DB.getSetting('todayBlockMinutes',0);
   const todayTasks=DB.getTasks().filter(t=>t.status==='today');
   const todayMin=todayTasks.reduce((s,t)=>s+t.estimated_minutes,0);
-  return `<div class="view">${tabBar()}
-    <div class="sticky-header">
-      <header class="header">
-        <div class="header-left">${LOGO_SM}</div>
-        <h1 class="header-title">Aufgaben</h1>
-        <div class="header-right">
-          <button class="btn btn-sm btn-primary inbox-new-btn" data-action="go" data-view="new">➕ Neu</button>
-          ${Sync.isConnected()?'<span class="sync-dot" title="Synchronisiert">☁️</span>':''}
-          <button class="btn-icon" data-action="go" data-view="settings">⚙️</button>
-        </div>
-      </header>
-    </div>
+  return `<div class="view">${hdr('Aufgaben')}
     <div class="content">
       ${updateBanner()}
       ${blockMin>0?`<div class="today-stats">
@@ -381,7 +385,10 @@ function vInbox() {
         <span class="stat-item ${todayMin>blockMin?'stat-over':'stat-ok'}">${blockMin-todayMin>=0?blockMin-todayMin+' min frei':Math.abs(blockMin-todayMin)+' min über'}</span>
         <button class="btn-link" data-action="reset-block">ändern</button>
       </div>`:''}
-      <p class="scroll-hint">Wähle hier deine Aufgaben für Heute.</p>
+      <div class="inbox-actions">
+        <p class="scroll-hint">Wähle hier deine Aufgaben für Heute.</p>
+        <button class="btn btn-sm btn-primary inbox-new-btn" data-action="go" data-view="new">➕ Neue Aufgabe</button>
+      </div>
       <div class="filters">
         <input type="search" class="search-input" placeholder="Aufgabe suchen…" value="${esc(q)}" data-action="search">
         <div class="filter-row">
@@ -424,8 +431,7 @@ function vNewTask(task=null) {
   const dL={easy:'Leicht',medium:'Mittel',hard:'Schwer'};
   const times=[5,10,15,30,45,60];
   S._estApplied=null;
-  return `<div class="view">${tabBar()}
-    ${hdr(isEdit?'Bearbeiten':'Neue Aufgabe',isEdit)}
+  return `<div class="view">${hdr(isEdit?'Bearbeiten':'Neue Aufgabe',isEdit)}
     <div class="content">
       ${!isEdit&&DB.getDoneLog().length?`<button class="btn-link archive-link" data-action="go" data-view="archive">🗂 Aus dem Archiv wählen ›</button>`:''}
       <form class="form" id="task-form">
@@ -542,7 +548,7 @@ function vArchive() {
   const catColor=name=>cats.find(c=>c.name===name)?.color||'#6b7280';
   const openKeys=new Set(DB.getTasks().filter(t=>['today','later','skipped'].includes(t.status)).map(t=>Estimate.key(t.title)));
   const fmtD=iso=>new Date(iso).toLocaleDateString('de',{day:'2-digit',month:'2-digit',year:'2-digit'});
-  return `<div class="view">${tabBar()}<div class="sticky-header">${hdr('Archiv',true)}</div>
+  return `<div class="view">${hdr('Archiv',true)}
     <div class="content">
       <p class="scroll-hint">Erledigte Aufgaben mit deiner tatsächlich gebrauchten Zeit. Tippe auf <strong>↺</strong>, um eine Aufgabe erneut anzulegen.</p>
       <div class="filters"><input type="search" class="search-input" placeholder="Im Archiv suchen…" value="${esc(S.params.aq||'')}" data-action="arch-search"></div>
@@ -588,9 +594,8 @@ function vToday() {
   const blockMin=DB.getSetting('todayBlockMinutes',0);
   const noBlock=blockMin===0;
   const pm=Points.blockMax(tasks);
-  return `<div class="view">${tabBar()}
+  return `<div class="view">${hdr('Heute')}
     <div class="sticky-header">
-      ${hdr('Heute')}
       ${noBlock
         ?`<div class="block-setup card">
             <p class="block-setup-text">⏰ Lege zuerst deinen Zeitblock fest:</p>
@@ -670,7 +675,7 @@ function vTimer() {
   /* IDLE */
   if(Timer.state==='IDLE') {
     const todayN=DB.getTasks().filter(t=>t.status==='today').length;
-    return `<div class="view">${tabBar()}${hdr('Timer')}
+    return `<div class="view">${hdr('Timer')}
       <div class="content center-content">
         <div class="empty-icon">⏱️</div>
         ${todayN>0
@@ -681,7 +686,7 @@ function vTimer() {
 
   /* PAUSE / BREAK */
   if(Timer.breakState==='RUNNING') {
-    return `<div class="view">${tabBar()}${hdr('Pause')}
+    return `<div class="view">${hdr('Pause')}
       <div class="content center-content">
         <div class="break-cup">☕</div>
         <p class="break-title">Gönn dir eine kurze Pause!</p>
@@ -692,8 +697,7 @@ function vTimer() {
 
   /* ALL DONE */
   if(Timer.state==='ALL_DONE') {
-    return `<div class="view">${tabBar()}
-      <div class="sticky-header">${hdr('Timer')}</div>
+    return `<div class="view">${hdr('Timer')}
       <div class="content">
         <div class="alldone-header">
           <div class="alldone-icon">🎉</div>
@@ -733,7 +737,7 @@ function vTimer() {
   if(Timer.state==='READY') {
     const cats=DB.getCategories();
     const catColor=cats.find(c=>c.name===t?.category)?.color||'#6b7280';
-    return `<div class="view">${tabBar()}${hdr('Timer')}
+    return `<div class="view">${hdr('Timer')}
       <div class="content center-content">
         <div class="ready-card card pri-card ${priClass(t||{})}" style="width:100%">
           <div class="ready-icon">🎯</div>
@@ -784,8 +788,7 @@ function vTimer() {
   const bLeft=Timer.blockTimeLeft;
   const bPct=bLeft!==null&&Timer.blockTotalMin>0?Math.max(0,(bLeft/(Timer.blockTotalMin*60))*100):null;
 
-  return `<div class="view timer-view-${timerPhase}">${tabBar()}
-    <div class="sticky-header">${hdr('Timer')}</div>
+  return `<div class="view timer-view-${timerPhase}">${hdr('Timer')}
     <div class="content timer-content">
 
       ${isIntro?`<div class="intro-countdown">
@@ -862,7 +865,7 @@ function vResults() {
   if(!r){go('inbox');return'';}
   const cls=r.score>=8?'score-green':r.score>=5?'score-yellow':'score-red';
   const msg=r.score>=8?'Hervorragend! Du bist ein Champion! 🏆':r.score>=5?'Gut gemacht! Weiter so! 👍':'Da geht noch mehr! Du schaffst das! 💪';
-  return `<div class="view"><div class="sticky-header">${hdr('Ergebnisse',false)}</div>
+  return `<div class="view">${hdr('Ergebnisse')}
     <div class="content center-content">
       <div class="results-card card">
         <div class="results-score ${cls}">${r.score}</div>
@@ -945,7 +948,7 @@ function vHistory() {
   const week=getWeek(byDate);
   const st=fourWeekStats();
   const pct=n=>st.total?(n/st.total*100).toFixed(1):0;
-  return `<div class="view">${tabBar()}<div class="sticky-header">${hdr('Historie')}</div>
+  return `<div class="view">${hdr('Historie')}
     <div class="content">
       <div class="card level-card">
         <div class="level-info"><span class="level-badge">Level ${lv.level}</span><span class="level-score">${totalScore} Gesamtpunkte</span></div>
@@ -1021,8 +1024,15 @@ function getWeek(byDate) {
 /* ── Settings ── */
 function vSettings() {
   const theme=DB.getSetting('theme','light'),fs=DB.getSetting('fontSize','normal'),snd=DB.getSetting('sound',true);
-  return `<div class="view">${tabBar()}<div class="sticky-header">${hdr('Einstellungen',true)}</div>
+  return `<div class="view">${hdr('Einstellungen',true)}
     <div class="content">
+      <div class="card settings-card">
+        <h3 class="card-title">👤 Profil</h3>
+        <div class="form-group">
+          <label class="form-label" for="f-username">Dein Name (erscheint oben in der Kopfleiste)</label>
+          <input type="text" id="f-username" class="form-input" maxlength="40" placeholder="z. B. Dirk" value="${esc(DB.getSetting('userName',''))}" autocomplete="given-name">
+        </div>
+      </div>
       <div class="card settings-card">
         <h3 class="card-title">Erscheinungsbild</h3>
         <div class="setting-row">
@@ -1240,7 +1250,7 @@ const OLD_CAT_COLORS=['#4f46e5','#0ea5e9','#10b981','#f59e0b','#ef4444','#ec4899
 function vCategories() {
   const cats=DB.getCategories();
   const colors=CAT_COLORS;
-  return `<div class="view">${tabBar()}<div class="sticky-header">${hdr('Kategorien',true)}</div>
+  return `<div class="view">${hdr('Kategorien',true)}
     <div class="content">
       ${cats.map(c=>`<div class="task-card">
         <span class="cat-dot" style="background:${c.color}"></span>
@@ -1350,6 +1360,7 @@ document.addEventListener('change', e=>{
   if(action==='fpri'){S.params.fPri=e.target.value;render();}
   if(e.target.id==='f-cat') updateEstHint();
   if(action==='backup-restore') backupRestore(e.target);
+  if(e.target.id==='f-username'){ DB.setSetting('userName',e.target.value.trim()); render(); }
 });
 
 document.addEventListener('input', e=>{
@@ -1357,6 +1368,7 @@ document.addEventListener('input', e=>{
   if(action==='search'){S.params.q=e.target.value;S._refocusSearch=true;render();}
   if(action==='arch-search'){S.params.aq=e.target.value;S._refocusSearch=true;render();}
   if(e.target.id==='f-title') updateEstHint();
+  if(e.target.id==='f-username'){ const el=document.querySelector('.header-user'); if(el) el.textContent=e.target.value.trim()||'Step4Step'; }
   if(e.target.id==='f-time'){
     document.querySelectorAll('[data-action="set-time"]').forEach(b=>b.classList.toggle('active',b.dataset.val===e.target.value));
     updateEstHint();
@@ -1507,7 +1519,7 @@ function startDrag(e,item,list) {
   let y=e.clientY, raf=null;
   const EDGE=70, MAX_SPEED=18;
   const bounds=()=>{
-    const top=document.querySelector('.sticky-header')?.getBoundingClientRect().bottom||0;
+    const top=(document.querySelector('.sticky-header')||document.querySelector('.app-top'))?.getBoundingClientRect().bottom||0;
     const bottom=document.querySelector('.footer-fixed')?.getBoundingClientRect().top||window.innerHeight;
     return {top,bottom};
   };
@@ -1693,8 +1705,7 @@ function vKI() {
     ${chat.length > 0 ? `<button class="btn-link mt-sm" data-action="clear-chat">Chat löschen</button>` : ''}
   </div>` : '';
 
-  return `<div class="view">${tabBar()}
-    <div class="sticky-header">${hdr('KI-Coach')}</div>
+  return `<div class="view">${hdr('KI-Coach')}
     <div class="content">
       ${setupCard}
       ${statsCard}
