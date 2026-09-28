@@ -1,4 +1,4 @@
-const CACHE = 's4s-v8';
+const CACHE = 's4s-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -17,7 +17,7 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
@@ -28,24 +28,36 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
+// Netzwerk zuerst, Cache als Offline-Reserve: Updates kommen so bei jedem Start mit Internet an,
+// ohne dass eine neue Cache-Version nötig ist. Bei langsamem Netz (> 3 s) greift der Cache.
 self.addEventListener('fetch', e => {
-  // API-Anfragen immer direkt durchleiten
-  if (e.request.url.includes('googleapis.com') ||
-      e.request.url.includes('firebaseio.com') ||
-      e.request.url.includes('firestore.googleapis.com') ||
-      e.request.url.includes('gstatic.com/firebasejs')) return;
+  const req = e.request;
+  // Nur eigene Dateien – Gemini, Firebase usw. laufen direkt ins Netz
+  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+
+  const fromNet = fetch(req, { cache: 'no-cache' }).then(res => {
+    if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
+    return res;
+  });
+  const fromCache = () => caches.match(req, { ignoreSearch: true })
+    .then(r => r || (req.mode === 'navigate' ? caches.match('./index.html') : undefined));
+  const slow = new Promise(r => setTimeout(r, 3000)).then(fromCache);
 
   e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (res.ok) {
-          const clone = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
-        }
-        return res;
-      });
-    })
+    Promise.race([fromNet, slow])
+      .then(r => r || fromNet)
+      .catch(() => fromCache().then(r => r || Response.error()))
+  );
+});
+
+// Neustart-Button: alle App-Dateien frisch laden. addAll ist „alles oder nichts“ –
+// ohne Internet bleibt der bisherige Stand im Cache und die App startet trotzdem.
+self.addEventListener('message', e => {
+  if (e.data !== 'refresh') return;
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' }))))
+      .then(() => e.ports[0]?.postMessage('ok'), () => e.ports[0]?.postMessage('offline'))
   );
 });
 

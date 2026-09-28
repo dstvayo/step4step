@@ -270,6 +270,16 @@ const tabBar=()=>`<nav class="tabbar">${TABS.map(t=>`<button class="tab${S.tab==
 const LOGO_SM=`<span class="logo"><img class="logo-img" src="icons/icon.svg" alt="">S4S</span>`;
 const hdr=(title,back=false)=>`<header class="header"><div class="header-left">${back?`<button class="btn-icon" data-action="back">‹</button>`:LOGO_SM}</div><h1 class="header-title">${title}</h1><div class="header-right">${Sync.isConnected()?'<span class="sync-dot" title="Synchronisiert">☁️</span>':''}<button class="btn-icon" data-action="go" data-view="settings">⚙️</button></div></header>`;
 
+/* ── Hinweis: neue Version geladen ── */
+function updateBanner() {
+  if(!S.updateReady) return '';
+  return `<div class="backup-reminder">
+    <div class="backup-reminder-text"><strong>🔄 Neue Version verfügbar</strong><span>Starte die App neu, um sie zu verwenden.</span></div>
+    <div class="backup-reminder-actions"><button class="btn btn-sm btn-primary" data-action="app-restart">Neu starten</button></div>
+  </div>`;
+}
+const startBanners=()=>updateBanner()+backupReminder();
+
 /* ── Backup-Erinnerung (Startbildschirm) ── */
 function backupReminder() {
   if(S._backupSnoozed||!Backup.isDue()) return '';
@@ -287,7 +297,7 @@ function backupReminder() {
 /* ── Welcome ── */
 function vWelcome() {
   return `<div class="view view-welcome"><div class="welcome-content">
-    ${backupReminder()}
+    ${startBanners()}
     <img class="logo-big" src="icons/icon.svg" alt="Step4Step Logo">
     <h2 class="welcome-title">Step4Step</h2>
     <p class="welcome-subtitle">Dein persönlicher Motivator</p>
@@ -312,7 +322,7 @@ function vBlockSetup() {
       <div class="block-setup-name">Step4Step</div>
     </div>
     <div class="content">
-      ${backupReminder()}
+      ${startBanners()}
       <div class="card block-start-card">
         <div class="block-icon">⏰</div>
         <h2 class="block-start-title">Wie viel Zeit hast du heute?</h2>
@@ -360,7 +370,7 @@ function vInbox() {
       </header>
     </div>
     <div class="content">
-      ${backupReminder()}
+      ${startBanners()}
       ${blockMin>0?`<div class="today-stats">
         <span class="stat-item">📅 ${todayTasks.length} Aufgaben</span>
         <span class="stat-item">⏱ ${todayMin} / ${blockMin} min</span>
@@ -1071,6 +1081,12 @@ function vSettings() {
             <button class="btn btn-primary btn-full" data-action="save-ai-key">API-Schlüssel speichern</button>
             <p class="form-hint">Kostenlos unter aistudio.google.com → „Get API key"</p>`}
       </div>
+      <div class="card settings-card">
+        <h3 class="card-title">🔄 App</h3>
+        <div class="setting-row"><span class="setting-label">Version</span><span class="setting-value">${esc(S.appVersion||'–')}${S.updateReady?' · Update bereit':''}</span></div>
+        <button class="btn btn-primary btn-full mt-sm" data-action="app-restart" ${S.restarting?'disabled':''}>${S.restarting?'Starte neu …':'App aktualisieren & neu starten'}</button>
+        <p class="form-hint">Lädt die neueste Version und startet die App neu. Deine Aufgaben und Einstellungen bleiben erhalten.</p>
+      </div>
       ${backupCard()}
       <div class="card settings-card danger-zone">
         <h3 class="card-title">Daten</h3>
@@ -1096,6 +1112,24 @@ function backupCard() {
     <label class="btn btn-secondary btn-full mt-sm backup-restore">Backup wiederherstellen …<input type="file" accept=".json,application/json" data-action="backup-restore" hidden></label>
     <p class="form-hint">Enthält alle Aufgaben, Historie, Zeit-Protokoll, Kategorien, Einstellungen inkl. API-Schlüssel und alle App-Dateien. Im gewählten Ordner bleiben die letzten ${Backup.KEEP} Backups. Nichts wird ins Internet übertragen. Erinnerung nach ${Backup.REMIND_DAYS/7} Wochen ohne Backup.</p>
   </div>`;
+}
+
+/* ── Neustart: neueste Version holen, App-Dateien frisch cachen, neu laden ──
+   Daten (localStorage) sind davon nicht betroffen. */
+async function restartApp() {
+  if(!['IDLE','ALL_DONE'].includes(Timer.state)&&
+     !confirm('Ein Timer-Block läuft. Beim Neustart wird er beendet – erledigte Aufgaben bleiben gespeichert, die Punkte dieses Blocks aber nicht.\n\nTrotzdem neu starten?')) return;
+  S.restarting=true; render();
+  try {
+    const reg=await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+    const sw=navigator.serviceWorker?.controller;
+    if(sw) await new Promise(res=>{   // Service Worker lädt alle Dateien frisch (max. 8 s)
+      const ch=new MessageChannel(); ch.port1.onmessage=res;
+      sw.postMessage('refresh',[ch.port2]); setTimeout(res,8000);
+    });
+  } catch(e) { /* Neu laden klappt auch ohne Service Worker */ }
+  location.reload();
 }
 
 async function backupNow() {
@@ -1206,6 +1240,7 @@ document.addEventListener('click', e=>{
     case 'set-time':   setToggle('set-time','f-time',val); updateEstHint(); break;
     case 'apply-est':  applyEst(val); break;
     case 'backup-now':    backupNow(); break;
+    case 'app-restart':   restartApp(); break;
     case 'backup-folder': backupChooseFolder(); break;
     case 'backup-snooze': S._backupSnoozed=true; render(); break;
     case 'arch-reuse': archReuse(el.dataset.key); break;
@@ -1801,6 +1836,14 @@ function init() {
     S.tab='inbox';
   }
   if(typeof Sync!=='undefined'&&Sync.hasConfig()) Sync.init().then(()=>render());
+  if('serviceWorker' in navigator) {
+    const hadController=!!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(hadController){ S.updateReady=true; render(); } });
+    document.addEventListener('visibilitychange',()=>{
+      if(!document.hidden) navigator.serviceWorker.getRegistration().then(r=>r?.update()).catch(()=>{});
+    });
+  }
+  caches?.keys().then(k=>{ S.appVersion=k.find(x=>x.startsWith('s4s-'))||''; if(S.view==='settings') render(); }).catch(()=>{});
   render();
 }
 init();
