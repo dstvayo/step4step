@@ -1,4 +1,4 @@
-const CACHE = 's4s-v9';
+const CACHE = 's4s-v10';
 const ASSETS = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const ASSETS = [
   './js/estimate.js',
   './js/points.js',
   './js/backup.js',
+  './js/homesync.js',
   './js/ai.js',
   './js/sync.js',
   './js/app.js',

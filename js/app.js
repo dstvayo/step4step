@@ -1057,7 +1057,8 @@ function vSettings() {
           <button class="btn btn-sm btn-secondary" data-action="reset-block">Reset</button>
         </div>
       </div>
-      <div class="card settings-card">
+      ${homeSyncCard()}
+      ${HomeSync.isConfigured()?'':`<div class="card settings-card">
         <h3 class="card-title">☁️ Geräte-Synchronisation (Firebase)</h3>
         ${Sync.isConnected()
           ?`<div class="setting-row"><span class="setting-label">Angemeldet als</span><span class="sync-email">${Sync.getUserEmail()||'Google'}</span></div>
@@ -1069,7 +1070,7 @@ function vSettings() {
             :`<p class="form-hint">Firebase-Projekt einrichten (console.firebase.google.com), dann Konfiguration hier einfügen:</p>
               <textarea id="fb-config-input" class="form-input" rows="4" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
               <button class="btn btn-primary btn-full mt-sm" data-action="save-fb-config">Konfiguration speichern</button>`}
-      </div>
+      </div>`}
       <div class="card settings-card">
         <h3 class="card-title">🤖 KI-Coach (Google Gemini)</h3>
         ${AI.hasKey()
@@ -1112,6 +1113,61 @@ function backupCard() {
     <label class="btn btn-secondary btn-full mt-sm backup-restore">Backup wiederherstellen …<input type="file" accept=".json,application/json" data-action="backup-restore" hidden></label>
     <p class="form-hint">Enthält alle Aufgaben, Historie, Zeit-Protokoll, Kategorien, Einstellungen inkl. API-Schlüssel und alle App-Dateien. Im gewählten Ordner bleiben die letzten ${Backup.KEEP} Backups. Nichts wird ins Internet übertragen. Erinnerung nach ${Backup.REMIND_DAYS/7} Wochen ohne Backup.</p>
   </div>`;
+}
+
+/* ── Heim-Sync (Mac mini) ── */
+function homeSyncCard() {
+  const c=DB.getSetting('homeSync',null), last=DB.getSetting('homeSyncLast',null);
+  const fmt=iso=>new Date(iso).toLocaleString('de',{dateStyle:'short',timeStyle:'short'});
+  if(!c) return `<div class="card settings-card">
+    <h3 class="card-title">🏠 Heim-Sync (Mac mini)</h3>
+    <p class="form-hint">Gleicht Aufgaben, Historie und Kategorien zwischen deinen Geräten über deinen Mac ab – nur im Heim-WLAN, ohne Cloud. Unterwegs wird gesammelt und zu Hause abgeglichen.</p>
+    <div class="form-group mt-sm">
+      <label class="form-label">Server-Adresse</label>
+      <input id="hs-url" class="form-input" placeholder="z. B. Mac-mini-von-Dirk.local:8743" autocapitalize="off" autocorrect="off" spellcheck="false">
+    </div>
+    <div class="form-group mt-sm">
+      <label class="form-label">Zugangscode</label>
+      <input id="hs-token" class="form-input" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" autocapitalize="characters" autocorrect="off" autocomplete="off" spellcheck="false">
+    </div>
+    <button class="btn btn-primary btn-full mt-sm" data-action="hs-connect" ${S.hsBusy?'disabled':''}>${S.hsBusy?'Verbinde …':'Verbinden'}</button>
+  </div>`;
+  const status=!last?'noch nicht abgeglichen'
+    :last.ok?`✓ ${fmt(last.at)}`
+    :`⚠️ ${esc(last.error||'Fehler')}${last.at?` · zuletzt ok ${fmt(last.at)}`:''}`;
+  return `<div class="card settings-card">
+    <h3 class="card-title">🏠 Heim-Sync (Mac mini)</h3>
+    <div class="setting-row"><span class="setting-label">Server</span><span class="setting-value">${esc(c.url.replace(/^https?:\/\//,''))}</span></div>
+    <div class="setting-row"><span class="setting-label">Dieses Gerät</span><span class="setting-value">${esc(c.device_name)}</span></div>
+    <div class="setting-row"><span class="setting-label">Letzter Abgleich</span><span class="setting-value${last&&!last.ok?' stat-over':''}">${status}</span></div>
+    <button class="btn btn-primary btn-full mt-sm" data-action="hs-sync" ${S.hsBusy?'disabled':''}>${S.hsBusy?'Gleiche ab …':'Jetzt abgleichen'}</button>
+    <button class="btn btn-sm btn-secondary mt-sm" data-action="hs-disconnect">Trennen</button>
+    <p class="form-hint">Automatischer Abgleich beim Start, nach Änderungen und jede Minute – sobald der Mac im Heim-WLAN erreichbar ist.</p>
+  </div>`;
+}
+
+/* Abgleichen; nach empfangenen Änderungen neu zeichnen (nicht mitten in Formularen) */
+async function homeSyncNow(manual=false) {
+  if(manual){ S.hsBusy=true; render(); }
+  const r=await HomeSync.sync();
+  if(manual) S.hsBusy=false;
+  if(manual||(r?.received&&!['new','edit-task','categories'].includes(S.view))) render();
+  return r;
+}
+
+async function homeSyncConnect() {
+  const url=document.getElementById('hs-url')?.value||'', token=document.getElementById('hs-token')?.value||'';
+  if(!url.trim()||!token.trim()){ alert('Bitte Server-Adresse und Zugangscode eingeben.'); return; }
+  S.hsBusy=true; render();
+  try {
+    await HomeSync.connect(url,token);
+    S.hsBusy=false;
+    const r=await homeSyncNow(true);
+    alert(r?.ok
+      ?`✓ Mit dem Heim-Sync verbunden.\n\nVom Mac empfangen: ${r.received} · hochgeladen: ${r.sent}`
+      :`Verbunden, aber der erste Abgleich ist fehlgeschlagen: ${r?.error}`);
+    location.reload(); // Abgleich-Zeitgeber starten
+  } catch(e) { S.hsBusy=false; render(); alert(e.message); }
 }
 
 /* ── Neustart: neueste Version holen, App-Dateien frisch cachen, neu laden ──
@@ -1241,6 +1297,9 @@ document.addEventListener('click', e=>{
     case 'apply-est':  applyEst(val); break;
     case 'backup-now':    backupNow(); break;
     case 'app-restart':   restartApp(); break;
+    case 'hs-connect':    homeSyncConnect(); break;
+    case 'hs-sync':       homeSyncNow(true); break;
+    case 'hs-disconnect': if(confirm('Heim-Sync auf diesem Gerät trennen? Deine Daten bleiben auf dem Gerät und auf dem Mac erhalten.')){ HomeSync.disconnect(); render(); } break;
     case 'backup-folder': backupChooseFolder(); break;
     case 'backup-snooze': S._backupSnoozed=true; render(); break;
     case 'arch-reuse': archReuse(el.dataset.key); break;
@@ -1807,7 +1866,10 @@ function scheduleSync() {
 const _origSetItem=localStorage.setItem.bind(localStorage);
 localStorage.setItem=function(k,v){
   _origSetItem(k,v);
-  if(['tasks','results','categories','time_log'].includes(k)) scheduleSync();
+  if(['tasks','results','categories','time_log'].includes(k)) {
+    if(typeof HomeSync!=='undefined'&&HomeSync.isConfigured()) HomeSync.schedule();
+    else scheduleSync();
+  }
 };
 
 /* ── startTimer: Berechtigung anfragen ── */
@@ -1835,7 +1897,11 @@ function init() {
     S.view=blockOk?'inbox':'block-setup';
     S.tab='inbox';
   }
-  if(typeof Sync!=='undefined'&&Sync.hasConfig()) Sync.init().then(()=>render());
+  if(HomeSync.isConfigured()) {
+    homeSyncNow();
+    setInterval(()=>{ if(!document.hidden) homeSyncNow(); },60000);
+    document.addEventListener('visibilitychange',()=>{ if(!document.hidden) homeSyncNow(); });
+  } else if(typeof Sync!=='undefined'&&Sync.hasConfig()) Sync.init().then(()=>render());
   if('serviceWorker' in navigator) {
     const hadController=!!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(hadController){ S.updateReady=true; render(); } });

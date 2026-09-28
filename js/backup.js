@@ -12,7 +12,7 @@ const Backup = (() => {
   // App-Dateien, die mitgesichert werden (bei neuen Dateien hier und in sw.js ergänzen)
   const APP_FILES = [
     'index.html', 'manifest.json', 'sw.js', 'css/style.css',
-    'js/db.js', 'js/estimate.js', 'js/points.js', 'js/backup.js', 'js/ai.js', 'js/sync.js', 'js/app.js',
+    'js/db.js', 'js/estimate.js', 'js/points.js', 'js/backup.js', 'js/homesync.js', 'js/ai.js', 'js/sync.js', 'js/app.js',
     'icons/icon.svg', 'icons/icon-maskable.svg', 'icons/icon-192.png', 'icons/icon-512.png',
     'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
   ];
@@ -143,9 +143,11 @@ const Backup = (() => {
     localStorage.clear();
     Object.entries(b.data).forEach(([k, v]) => localStorage.setItem(k, v));
     // Backup-Stand dieses Geräts nicht mit dem alten Stand überschreiben
-    ['lastBackupAt', 'lastBackupInfo', 'backupFolderName'].forEach(k => {
+    ['lastBackupAt', 'lastBackupInfo', 'backupFolderName', 'homeSync', 'homeSyncLast'].forEach(k => {
       if (k in keepBackupSettings) DB.setSetting(k, keepBackupSettings[k]);
     });
+    // Heim-Sync danach wie ein erster Kontakt: zusammenführen, nichts auf dem Server löschen
+    if (typeof HomeSync !== 'undefined') HomeSync.resetState();
     return b;
   }
 

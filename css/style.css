@@ -94,7 +94,8 @@ a { color: var(--accent); text-decoration: none; }
 .header-title { font-size: var(--fs-lg); font-weight: 700; color: #fff; }
 .logo { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-lg); font-weight: 700; color: #fff; }
 .logo-img { width: 30px; height: 30px; flex-shrink: 0; }
-.logo-big { width: 128px; height: 128px; }
+/* Start-Logo: auf dem Handy dezent, auf großen Bildschirmen etwas größer */
+.logo-big { width: clamp(56px, 16vw, 88px); height: auto; aspect-ratio: 1; }
 .btn-icon { font-size: 22px; padding: 4px 8px; color: var(--text2); border-radius: var(--radius-sm); }
 .btn-icon:hover { background: var(--bg3); }
 .sticky-hint {
@@ -520,13 +521,13 @@ body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbin
 .view-block-setup { background: var(--bg); }
 .block-setup-hero {
   background: var(--head);
-  padding: 32px 24px 24px; text-align: center;
+  padding: 16px 16px 14px; text-align: center;
 }
 .block-setup-logo {
-  width: 72px; height: 72px; display: block; margin: 0 auto;
-  border-radius: 18px; outline: 2px solid rgba(255,255,255,.5); outline-offset: 2px;
+  width: 44px; height: 44px; display: block; margin: 0 auto;
+  border-radius: 11px; outline: 1.5px solid rgba(255,255,255,.5); outline-offset: 2px;
 }
-.block-setup-name { margin-top: 10px; font-size: var(--fs-xl); font-weight: 700; color: #fff; letter-spacing: -.5px; }
+.block-setup-name { margin-top: 6px; font-size: var(--fs-lg); font-weight: 700; color: #fff; letter-spacing: -.5px; }
 .block-start-card { text-align: center; margin-top: -1px; }
 .block-icon { font-size: 48px; margin-bottom: 8px; }
 .block-start-title { font-size: var(--fs-xl); font-weight: 700; margin-bottom: 6px; }
@@ -643,3 +644,7 @@ body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbin
 .backup-reminder-actions { display: flex; align-items: center; gap: 12px; }
 .setting-value { font-size: var(--fs-sm); color: var(--text2); text-align: right; }
 .backup-restore { cursor: pointer; }
+@media (min-width: 768px) {
+  .block-setup-hero { padding: 24px 24px 20px; }
+  .block-setup-logo { width: 60px; height: 60px; }
+}
