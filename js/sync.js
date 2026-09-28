@@ -94,6 +94,7 @@ const Sync = (() => {
       if (d.tasks)      localStorage.setItem('tasks',      JSON.stringify(d.tasks));
       if (d.results)    localStorage.setItem('results',    JSON.stringify(d.results));
       if (d.categories) localStorage.setItem('categories', JSON.stringify(d.categories));
+      if (d.time_log)   localStorage.setItem('time_log',   JSON.stringify(d.time_log));
     } catch(e) { console.warn('Sync pull:', e); }
   }
 
@@ -106,6 +107,7 @@ const Sync = (() => {
       if (d.tasks)      localStorage.setItem('tasks',      JSON.stringify(d.tasks));
       if (d.results)    localStorage.setItem('results',    JSON.stringify(d.results));
       if (d.categories) localStorage.setItem('categories', JSON.stringify(d.categories));
+      if (d.time_log)   localStorage.setItem('time_log',   JSON.stringify(d.time_log));
       if (typeof render==='function') render();
     }, e => console.warn('Sync listener:', e));
   }
@@ -119,6 +121,7 @@ const Sync = (() => {
         tasks:      JSON.parse(localStorage.getItem('tasks')      || '[]'),
         results:    JSON.parse(localStorage.getItem('results')    || '[]'),
         categories: JSON.parse(localStorage.getItem('categories') || '[]'),
+        time_log:   JSON.parse(localStorage.getItem('time_log')   || '[]'),
         updatedAt:  firebase.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
     } catch(e) { console.warn('Sync push:', e); }
