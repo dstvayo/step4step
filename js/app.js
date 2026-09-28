@@ -1103,11 +1103,16 @@ function backupCard() {
   const last=DB.getSetting('lastBackupAt','');
   const info=DB.getSetting('lastBackupInfo',null);
   const folder=DB.getSetting('backupFolderName','');
-  const lastTxt=last?new Date(last).toLocaleString('de',{dateStyle:'medium',timeStyle:'short'})+(info?.mode==='folder'?` · Ordner „${esc(info.folder)}“`:info?.mode?' · als Datei gespeichert':''):'noch keins';
+  const where={home:info?.stored==='drive'?' · USB-Stick am Mac':' · auf dem Mac (wartet auf Stick)',folder:` · Ordner „${esc(info?.folder||'')}“`,share:' · als Datei gespeichert',download:' · als Datei gespeichert'};
+  const lastTxt=last?new Date(last).toLocaleString('de',{dateStyle:'medium',timeStyle:'short'})+(where[info?.mode]||''):'noch keins';
   return `<div class="card settings-card">
     <h3 class="card-title">💾 Backup (nur lokal)</h3>
     <div class="setting-row"><span class="setting-label">Letztes Backup</span><span class="setting-value${Backup.isDue()?' stat-over':''}">${lastTxt}</span></div>
-    ${Backup.canChooseFolder()
+    ${HomeSync.isConfigured()
+      ?`<div class="setting-row"><span class="setting-label">Speicherort</span><span class="setting-value">🏠 Mac mini → USB-Stick</span></div>
+        <button class="btn btn-sm btn-secondary mt-sm" data-action="backup-file">📄 Als Datei sichern (unterwegs)</button>
+        <p class="form-hint">Im Heim-WLAN geht das Backup an deinen Mac, der es auf den USB-Stick legt. Unterwegs: „Als Datei sichern“ → z. B. „In Dateien sichern“ → „Auf meinem iPhone“.</p>`
+      :Backup.canChooseFolder()
       ?`<div class="setting-row"><span class="setting-label">Speicherort</span><span class="setting-value">${folder?`📁 ${esc(folder)}`:'noch nicht gewählt'}</span></div>
         <button class="btn btn-sm btn-secondary mt-sm" data-action="backup-folder">${folder?'Speicherort ändern':'Speicherort wählen'}</button>`
       :`<p class="form-hint">Dieser Browser kann keinen festen Ordner wählen. Das Backup wird als Datei gespeichert bzw. über „Teilen“ angeboten – dort z. B. „In Dateien sichern“ → „Auf meinem iPhone“ wählen.</p>`}
@@ -1190,17 +1195,26 @@ async function restartApp() {
   location.reload();
 }
 
-async function backupNow() {
+async function backupNow(skipHome=false) {
   if(S.backupBusy) return;
   S.backupBusy=true; render();
   try {
-    const r=await Backup.create();
+    const r=await Backup.create({skipHome});
     S._backupSnoozed=false;
-    alert(r.mode==='folder'
+    alert(r.mode==='home'
+      ?(r.stored==='drive'
+        ?`✓ Backup auf dem USB-Stick am Mac gespeichert\n\n${r.name}\n(${r.kept} Backups dieses Geräts, maximal ${Backup.KEEP})`
+        :`✓ Backup sicher auf dem Mac gespeichert\n\n${r.name}\n\nEs wird beim nächsten Projekt-Backup (S4S-Backup.command) automatisch auf den USB-Stick übertragen.`)
+      :r.mode==='folder'
       ?`✓ Backup gespeichert\n\n${r.name}\nOrdner: ${r.folder}\n(${r.kept} Backups vorhanden, maximal ${Backup.KEEP})`
       :`✓ Backup-Datei erstellt\n\n${r.name}`);
   } catch(e) {
-    if(e.name!=='AbortError') alert('Backup fehlgeschlagen: '+e.message);
+    if(e.code==='HOME_UNREACHABLE') {
+      S.backupBusy=false;
+      alert(`${e.message}.\n\nDu kannst das Backup stattdessen als Datei auf diesem Gerät sichern: Einstellungen → „Als Datei sichern“.`);
+      if(S.view!=='settings') go('settings');
+    }
+    else if(e.name!=='AbortError') alert('Backup fehlgeschlagen: '+e.message);
   }
   S.backupBusy=false; render();
 }
@@ -1298,6 +1312,7 @@ document.addEventListener('click', e=>{
     case 'set-time':   setToggle('set-time','f-time',val); updateEstHint(); break;
     case 'apply-est':  applyEst(val); break;
     case 'backup-now':    backupNow(); break;
+    case 'backup-file':   backupNow(true); break;
     case 'app-restart':   restartApp(); break;
     case 'hs-connect':    homeSyncConnect(); break;
     case 'hs-sync':       homeSyncNow(true); break;

@@ -3,8 +3,9 @@
 /* ── Lokales Backup (nichts wird ins Internet übertragen) ──
    Inhalt: alle App-Daten aus dem Browser-Speicher (Aufgaben, Historie, Zeit-Protokoll,
    Kategorien, Einstellungen inkl. API-Schlüssel/Firebase-Konfiguration) + alle App-Dateien.
-   Ziel:   ein frei wählbarer lokaler Ordner (z. B. USB-Stick BrainUpdate), dort bleiben die
-           letzten 10 Backups. Browser ohne Ordnerwahl (Safari, iPhone) speichern/teilen die Datei. */
+   Ziel:   1. mit Heim-Sync: an den Mac mini, der es auf den USB-Stick legt (10 je Gerät)
+           2. sonst ein frei wählbarer lokaler Ordner (Chrome/Edge), dort bleiben die letzten 10
+           3. sonst (Safari, iPhone unterwegs) Datei speichern/teilen */
 const Backup = (() => {
   const KEEP = 10;
   const PREFIX = 's4s-backup-';
@@ -102,13 +103,28 @@ const Backup = (() => {
   }
 
   /* Backup erstellen. Rückgabe: {mode:'folder'|'share'|'download', name, kept?, folder?} */
-  async function create() {
+  async function create({ skipHome = false } = {}) {
     const payload = await _collect();
     const name = `${PREFIX}${_stamp(new Date())}.json`;
     const text = JSON.stringify(payload);
     let result;
 
-    if (canChooseFolder()) {
+    // 1. Wahl, wenn Heim-Sync eingerichtet: an den Mac senden (→ USB-Stick). Unterwegs geht es unten weiter.
+    // Nicht automatisch auf Datei/Teilen ausweichen: Diese Dialoge brauchen einen frischen Tipp,
+    // der nach dem vergeblichen Warten auf den Mac verfallen wäre. Die App bietet dafür einen eigenen Knopf.
+    if (!skipHome && typeof HomeSync !== 'undefined' && HomeSync.isConfigured()) {
+      try {
+        const r = await HomeSync.uploadBackup(name, text);
+        result = { mode: 'home', name, stored: r.stored, folder: r.folder, kept: r.kept };
+      } catch (e) {
+        const err = new Error(e.name === 'AbortError' || e.name === 'TypeError' ? 'Mac nicht erreichbar (nicht im Heim-WLAN?)' : e.message);
+        err.code = 'HOME_UNREACHABLE';
+        throw err;
+      }
+    }
+
+    if (result) { /* erledigt */ }
+    else if (canChooseFolder()) {
       let dir = await _getDir();
       if (!dir || !(await _permitted(dir).catch(() => false))) dir = await chooseFolder();
       const fh = await dir.getFileHandle(name, { create: true });

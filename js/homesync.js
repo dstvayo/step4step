@@ -137,6 +137,24 @@ const HomeSync = (() => {
     clearTimeout(timer); timer = setTimeout(sync, 3000);
   }
 
+  /* App-Backup an den Mac senden (der legt es auf dem Backup-Laufwerk ab) */
+  async function uploadBackup(name, text) {
+    const c = cfg(); if (!c) throw new Error('Heim-Sync nicht eingerichtet');
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 15000);
+    try {
+      const res = await fetch(c.url + '/api/backup', {
+        method: 'POST', signal: ctl.signal, body: text,
+        headers: {
+          'Content-Type': 'application/json', Authorization: 'Bearer ' + c.token,
+          'X-S4S-Device': `${c.device_name}-${c.device_id.slice(0, 4)}`, 'X-S4S-Filename': name,
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Server-Fehler ' + res.status);
+      return data;   // {stored:'drive'|'mac', folder, kept}
+    } finally { clearTimeout(t); }
+  }
+
   /* Verbindung testen und speichern */
   async function connect(address, token) {
     let url = address.trim().replace(/\/+$/, '');
@@ -169,5 +187,5 @@ const HomeSync = (() => {
   /* Nach dem Einspielen eines Backups: wie ein erster Kontakt behandeln (zusammenführen statt löschen) */
   function resetState() { localStorage.removeItem(STATE_KEY); }
 
-  return { isConfigured, isApplying, sync, schedule, connect, disconnect, resetState, STATE_KEY };
+  return { isConfigured, isApplying, sync, schedule, connect, disconnect, resetState, uploadBackup, STATE_KEY };
 })();
