@@ -95,7 +95,9 @@ cat > "$PLIST" <<PL
 </dict></plist>
 PL
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$(id -u)" "$PLIST"
+# bootout läuft asynchron – warten, bis der alte Dienst wirklich weg ist (sonst "Bootstrap failed: 5")
+for i in $(seq 1 20); do launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || break; sleep 0.5; done
+launchctl bootstrap "gui/$(id -u)" "$PLIST" || { sleep 2; launchctl bootstrap "gui/$(id -u)" "$PLIST"; }
 echo "✓ Server gestartet und für den Autostart eingetragen"
 
 TOKEN=$(/usr/bin/python3 -c "import json;print(json.load(open('$DIR/config.json'))['token'])")
