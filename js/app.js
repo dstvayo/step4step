@@ -285,7 +285,6 @@ const hdr=(title,back=false)=>`<div class="app-top">
     </div>
     <div class="header-right">
       <h1 class="header-title">${title}</h1>
-      ${Sync.isConnected()?'<span class="sync-dot" title="Synchronisiert">☁️</span>':''}
       <button class="btn-icon header-settings" data-action="go" data-view="settings" aria-label="Einstellungen">⚙️</button>
     </div>
   </header>
@@ -1070,19 +1069,6 @@ function vSettings() {
         </div>
       </div>
       ${homeSyncCard()}
-      ${HomeSync.isConfigured()?'':`<div class="card settings-card">
-        <h3 class="card-title">☁️ Geräte-Synchronisation (Firebase)</h3>
-        ${Sync.isConnected()
-          ?`<div class="setting-row"><span class="setting-label">Angemeldet als</span><span class="sync-email">${Sync.getUserEmail()||'Google'}</span></div>
-            <div class="setting-row"><span class="setting-label">Status</span><span class="badge badge-rec">✓ Synchron</span></div>
-            <button class="btn btn-sm btn-secondary mt-sm" data-action="sync-signout">Abmelden</button>`
-          :Sync.hasConfig()
-            ?`<p class="form-hint">Firebase konfiguriert – bitte anmelden:</p>
-              <button class="btn btn-primary btn-full" data-action="sync-signin">Mit Google anmelden 🔑</button>`
-            :`<p class="form-hint">Firebase-Projekt einrichten (console.firebase.google.com), dann Konfiguration hier einfügen:</p>
-              <textarea id="fb-config-input" class="form-input" rows="4" placeholder='{"apiKey":"...","authDomain":"...","projectId":"..."}'></textarea>
-              <button class="btn btn-primary btn-full mt-sm" data-action="save-fb-config">Konfiguration speichern</button>`}
-      </div>`}
       <div class="card settings-card">
         <h3 class="card-title">🤖 KI-Coach (Google Gemini)</h3>
         ${AI.hasKey()
@@ -1333,9 +1319,6 @@ document.addEventListener('click', e=>{
     case 'arch-del':   archDel(el.dataset.key); break;
     case 'set-status': setToggle('set-status','f-status',val); break;
     /* ── KI-Aktionen ── */
-    case 'save-fb-config':   saveFbConfig(); break;
-    case 'sync-signin':      Sync.signIn().then(()=>render()).catch(e=>alert('Fehler: '+e.message)); break;
-    case 'sync-signout':     Sync.signOut(); break;
     case 'save-ai-key':      saveAiKey(); break;
     case 'remove-ai-key':    DB.setSetting('geminiKey',''); render(); break;
     case 'send-chat':        sendChat(); break;
@@ -1720,29 +1703,6 @@ function vKI() {
 }
 
 /* ── KI Action Functions ── */
-function saveFbConfig() {
-  let raw=(document.getElementById('fb-config-input')?.value||'').trim();
-  if(!raw){alert('Bitte die Firebase-Konfiguration eingeben.');return;}
-  try {
-    // Bereinigung: entfernt "const firebaseConfig = " und abschließendes Semikolon
-    raw=raw.replace(/^(?:const|var|let)\s+\w+\s*=\s*/,'').replace(/;?\s*$/,'');
-    // Akzeptiert JavaScript-Objekt-Notation UND gültiges JSON
-    // eslint-disable-next-line no-new-func
-    const obj=Function('return ('+raw+')')();
-    if(!obj||!obj.apiKey||!obj.projectId){
-      alert('Konfiguration unvollständig.\nBitte den gesamten { ... } Block aus Firebase kopieren – er muss apiKey und projectId enthalten.');
-      return;
-    }
-    DB.setSetting('firebaseConfig',JSON.stringify(obj));
-    Sync.init().then(ok=>{
-      if(ok) render();
-      else { render(); setTimeout(()=>Sync.signIn().then(()=>render()).catch(e=>alert('Anmeldung fehlgeschlagen: '+e.message)),300); }
-    });
-  } catch(e) {
-    alert('Format nicht erkannt.\nBitte den { ... } Block direkt aus dem Firebase-Code kopieren (ohne "const firebaseConfig =").');
-  }
-}
-
 function saveAiKey() {
   const key=(document.getElementById('ai-key-input')?.value||'').trim();
   if(!key){alert('Bitte einen API-Schlüssel eingeben.');return;}
@@ -1882,21 +1842,12 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
-/* ── Sync-Debounce (Feature ①) ── */
-let _syncTimer=null;
-function scheduleSync() {
-  clearTimeout(_syncTimer);
-  _syncTimer=setTimeout(()=>{
-    if(typeof Sync!=='undefined'&&Sync.isConnected()) Sync.pushAll();
-  },2000);
-}
 // localStorage-Patch: jede Daten-Schreiboperation triggert Sync
 const _origSetItem=localStorage.setItem.bind(localStorage);
 localStorage.setItem=function(k,v){
   _origSetItem(k,v);
   if(['tasks','results','categories','time_log'].includes(k)) {
     if(typeof HomeSync!=='undefined'&&HomeSync.isConfigured()) HomeSync.schedule();
-    else scheduleSync();
   }
 };
 
@@ -1929,7 +1880,7 @@ function init() {
     homeSyncNow();
     setInterval(()=>{ if(!document.hidden) homeSyncNow(); },60000);
     document.addEventListener('visibilitychange',()=>{ if(!document.hidden) homeSyncNow(); });
-  } else if(typeof Sync!=='undefined'&&Sync.hasConfig()) Sync.init().then(()=>render());
+  }
   if('serviceWorker' in navigator) {
     const hadController=!!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange',()=>{ if(hadController){ S.updateReady=true; render(); } });

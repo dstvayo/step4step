@@ -124,7 +124,7 @@ const HomeSync = (() => {
     if (running) return running;
     running = _run().catch(e => {
       const reason = e.name === 'AbortError' || e.name === 'TypeError'
-        ? 'Server nicht erreichbar (nicht im Heim-WLAN?)' : e.message;
+        ? 'Server nicht erreichbar (Heim-WLAN oder Tailscale aktiv?)' : e.message;
       DB.setSetting('homeSyncLast', { ...(DB.getSetting('homeSyncLast', {}) || {}), ok: false, error: reason, tried: new Date().toISOString() });
       return { ok: false, error: reason };
     }).finally(() => { running = null; });
@@ -163,7 +163,7 @@ const HomeSync = (() => {
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let res;
     try { res = await fetch(url + '/api/ping', { headers: { Authorization: 'Bearer ' + token.trim() }, signal: ctl.signal }); }
-    catch { throw new Error('Server nicht erreichbar. Bist du im Heim-WLAN, läuft der Mac und ist das Zertifikat auf diesem Gerät vertraut?'); }
+    catch { throw new Error('Server nicht erreichbar. Bist du im Heim-WLAN oder ist Tailscale aktiv, läuft der Mac und ist das Zertifikat auf diesem Gerät vertraut?'); }
     finally { clearTimeout(t); }
     if (res.status === 401) throw new Error('Zugangscode ungültig.');
     if (!res.ok) throw new Error('Server-Fehler ' + res.status);

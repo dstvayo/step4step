@@ -1,4 +1,4 @@
-const CACHE = 's4s-v13';
+const CACHE = 's4s-v14';
 const ASSETS = [
   './',
   './index.html',
@@ -9,7 +9,6 @@ const ASSETS = [
   './js/backup.js',
   './js/homesync.js',
   './js/ai.js',
-  './js/sync.js',
   './js/app.js',
   './icons/icon.svg',
   './icons/icon-192.png',

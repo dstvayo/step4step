@@ -2,7 +2,7 @@
 
 /* ── Lokales Backup (nichts wird ins Internet übertragen) ──
    Inhalt: alle App-Daten aus dem Browser-Speicher (Aufgaben, Historie, Zeit-Protokoll,
-   Kategorien, Einstellungen inkl. API-Schlüssel/Firebase-Konfiguration) + alle App-Dateien.
+   Kategorien, Einstellungen inkl. API-Schlüssel) + alle App-Dateien.
    Ziel:   1. mit Heim-Sync: an den Mac mini, der es auf den USB-Stick legt (10 je Gerät)
            2. sonst ein frei wählbarer lokaler Ordner (Chrome/Edge), dort bleiben die letzten 10
            3. sonst (Safari, iPhone unterwegs) Datei speichern/teilen */
@@ -13,7 +13,7 @@ const Backup = (() => {
   // App-Dateien, die mitgesichert werden (bei neuen Dateien hier und in sw.js ergänzen)
   const APP_FILES = [
     'index.html', 'manifest.json', 'sw.js', 'css/style.css',
-    'js/db.js', 'js/estimate.js', 'js/points.js', 'js/backup.js', 'js/homesync.js', 'js/ai.js', 'js/sync.js', 'js/app.js',
+    'js/db.js', 'js/estimate.js', 'js/points.js', 'js/backup.js', 'js/homesync.js', 'js/ai.js', 'js/app.js',
     'icons/icon.svg', 'icons/icon-maskable.svg', 'icons/icon-192.png', 'icons/icon-512.png',
     'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
   ];
