@@ -159,7 +159,8 @@ const HomeSync = (() => {
   async function connect(address, token) {
     let url = address.trim().replace(/\/+$/, '');
     if (!/^https?:\/\//.test(url)) url = 'https://' + url;
-    if (!/:\d+$/.test(url.replace(/^https?:\/\//, ''))) url += ':8743';
+    // Tailscale-Name (…ts.net) läuft über „tailscale serve“ auf Port 443, sonst Heim-Server-Port
+    if (!/:\d+$/.test(url.replace(/^https?:\/\//, '')) && !/\.ts\.net$/i.test(url)) url += ':8743';
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     let res;
     try { res = await fetch(url + '/api/ping', { headers: { Authorization: 'Bearer ' + token.trim() }, signal: ctl.signal }); }

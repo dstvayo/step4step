@@ -1,4 +1,4 @@
-const CACHE = 's4s-v15';
+const CACHE = 's4s-v16';
 const ASSETS = [
   './',
   './index.html',

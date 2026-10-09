@@ -5,5 +5,8 @@ Läuft auf dem Mac mini, speichert alle Aufgaben zentral in
 
 - Einrichten / aktualisieren: `bash server/install.sh` (Zugangscode, CA und Daten bleiben erhalten; das Server-Zertifikat wird neu erzeugt)
 - Autostart: LaunchAgent `de.step4step.heimsync`
-- Erreichbar im Heim-WLAN über `<Mac>.local:8743`, unterwegs über die Tailscale-Adresse (`100.x` bzw. MagicDNS-Name) – beide stehen im Zertifikat.
+- Heim-WLAN: `https://<Mac>.local:8743` mit eigener Heim-CA. Die CA ist per Name-Constraint auf .local und private IPs beschränkt –
+  Tailscale-Adressen dürfen deshalb NICHT ins Server-Zertifikat (sonst ist das ganze Zertifikat ungültig).
+- Unterwegs: `tailscale serve --bg https+insecure://localhost:8743` → erreichbar unter `https://<mac>.<tailnet>.ts.net`
+  mit gültigem Tailscale-Zertifikat (kein Zertifikat auf dem iPhone nötig). In der App als Adresse nur den ts.net-Namen eintragen.
 - Nur Python-Standardbibliothek, keine Abhängigkeiten.

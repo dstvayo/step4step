@@ -47,13 +47,6 @@ fi
 # ── Server-Zertifikat (neu bei jedem Lauf, damit aktuelle IP-Adressen enthalten sind) ──
 SAN="DNS:$HOST,DNS:localhost,IP:127.0.0.1"
 for IF in en0 en1 en2; do IP=$(ipconfig getifaddr "$IF" 2>/dev/null || true); [ -n "$IP" ] && SAN="$SAN,IP:$IP"; done
-# Tailscale (unterwegs): 100.x-Adresse und MagicDNS-Name ins Zertifikat aufnehmen
-TS=/Applications/Tailscale.app/Contents/MacOS/Tailscale; [ -x "$TS" ] || TS=$(command -v tailscale || true)
-if [ -n "$TS" ]; then
-  TSIP=$("$TS" ip -4 2>/dev/null | head -1 || true); [ -n "$TSIP" ] && SAN="$SAN,IP:$TSIP"
-  TSDNS=$("$TS" status --json 2>/dev/null | /usr/bin/python3 -c "import json,sys;print(json.load(sys.stdin)['Self']['DNSName'].rstrip('.'))" 2>/dev/null || true)
-  [ -n "$TSDNS" ] && SAN="$SAN,DNS:$TSDNS"
-fi
 cat > server.cnf <<CNF
 [req]
 distinguished_name = dn
@@ -104,7 +97,7 @@ TOKEN=$(/usr/bin/python3 -c "import json;print(json.load(open('$DIR/config.json'
 echo
 echo "════════════════════════════════════════════════"
 echo " Server-Adresse:  $HOST:$PORT  (Heim-WLAN)"
-[ -n "${TSIP:-}" ] && echo " Unterwegs:       ${TSDNS:-$TSIP}:$PORT  (Tailscale)"
+echo " Unterwegs:       Tailscale-Name aus \"tailscale serve status\" (siehe server/README.md)"
 echo " Zugangscode:     $TOKEN"
 echo " Zertifikat:      $SRC/S4S-Heim-CA.crt"
 echo "════════════════════════════════════════════════"
