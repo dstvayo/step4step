@@ -1,8 +1,9 @@
-const CACHE = 's4s-v14';
+const CACHE = 's4s-v15';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
+  './js/store.js',
   './js/db.js',
   './js/estimate.js',
   './js/points.js',

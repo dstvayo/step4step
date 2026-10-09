@@ -2,3 +2,6 @@
 Thumbs.db
 *.log
 autopush.log
+server/__pycache__/
+server/S4S-Heim-CA.crt
+*.pyc

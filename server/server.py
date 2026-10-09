@@ -100,6 +100,14 @@ def log(msg):
     print(f"{datetime.datetime.now():%Y-%m-%d %H:%M:%S} {msg}", flush=True)
 
 
+def _newer(server_rec, incoming):
+    """True, wenn die Server-Fassung nachweislich jünger ist als die eingehende."""
+    try:
+        return float(server_rec.get('updatedAt') or 0) > float(incoming.get('updatedAt') or 0)
+    except (TypeError, ValueError, AttributeError):
+        return False
+
+
 class Store:
     """Datenbestand in einer JSON-Datei, atomar geschrieben."""
 
@@ -138,11 +146,17 @@ class Store:
         d = self.data
         now = datetime.datetime.now().isoformat(timespec='seconds')
         applied = 0
+        keep = {}
         for coll in COLLECTIONS:
             ch = changes.get(coll) or {}
             items = d['colls'][coll]
             for rec in ch.get('upserts') or []:
                 if not isinstance(rec, dict) or not rec.get('id'):
+                    continue
+                old = items.get(str(rec['id']))
+                # Konflikt: Server hat eine neuere Fassung (updatedAt) → behalten und an das Gerät zurückgeben
+                if old and not old['deleted'] and _newer(old['record'], rec):
+                    keep.setdefault(coll, set()).add(str(rec['id']))
                     continue
                 d['rev'] += 1; applied += 1
                 items[str(rec['id'])] = {'rev': d['rev'], 'deleted': False, 'device': device, 'ts': now, 'record': rec}
@@ -155,7 +169,7 @@ class Store:
         for coll in COLLECTIONS:
             lst = [{'id': rid, 'deleted': e['deleted'], 'record': e['record']}
                    for rid, e in d['colls'][coll].items()
-                   if e['rev'] > since and e['device'] != device]
+                   if (e['rev'] > since and e['device'] != device) or rid in keep.get(coll, ())]
             if lst:
                 out[coll] = lst
         self.save()

@@ -131,8 +131,8 @@ class TimerVM {
     this._ping();
   }
   _saveTimerState() {
-    if(!this.current) { localStorage.removeItem('timer_running'); return; }
-    localStorage.setItem('timer_running', JSON.stringify({
+    if(!this.current) { Store.removeItem('timer_running'); return; }
+    Store.setItem('timer_running', JSON.stringify({
       taskId:this.current.id, startedAt:this.startedAt,
       pausedSec:this._pausedSec, state:this.state,
       blockStartedAt:this.blockStartedAt, blockTotalMin:this.blockTotalMin,
@@ -1174,7 +1174,7 @@ async function homeSyncConnect() {
 }
 
 /* ── Neustart: neueste Version holen, App-Dateien frisch cachen, neu laden ──
-   Daten (localStorage) sind davon nicht betroffen. */
+   Daten (App-Speicher) sind davon nicht betroffen. */
 async function restartApp() {
   if(!['IDLE','ALL_DONE'].includes(Timer.state)&&
      !confirm('Ein Timer-Block läuft. Beim Neustart wird er beendet – erledigte Aufgaben bleiben gespeichert, die Punkte dieses Blocks aber nicht.\n\nTrotzdem neu starten?')) return;
@@ -1299,7 +1299,7 @@ document.addEventListener('click', e=>{
     case 'cal-nav':    go('history',{calDate:date}); break;
     case 'set-theme':  DB.setSetting('theme',val); render(); break;
     case 'set-font':   DB.setSetting('fontSize',val); render(); break;
-    case 'clear-all':  if(confirm('Alle Daten wirklich löschen?')){localStorage.clear();location.reload();} break;
+    case 'clear-all':  if(confirm('Alle Daten wirklich löschen?')){Store.clear().then(()=>location.reload());} break;
     case 'del-cat':    if(confirm('Kategorie löschen?')){DB.deleteCategory(id);render();} break;
     case 'add-cat':    addCat(); break;
     case 'pick-color': pickColor(color); break;
@@ -1842,14 +1842,10 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
-// localStorage-Patch: jede Daten-Schreiboperation triggert Sync
-const _origSetItem=localStorage.setItem.bind(localStorage);
-localStorage.setItem=function(k,v){
-  _origSetItem(k,v);
-  if(['tasks','results','categories','time_log'].includes(k)) {
-    if(typeof HomeSync!=='undefined'&&HomeSync.isConfigured()) HomeSync.schedule();
-  }
-};
+// jede Daten-Schreiboperation stößt den Heim-Sync an
+Store.onChange(k=>{
+  if(['tasks','results','categories','time_log'].includes(k)&&typeof HomeSync!=='undefined'&&HomeSync.isConfigured()) HomeSync.schedule();
+});
 
 /* ── startTimer: Berechtigung anfragen ── */
 const _origStartTimer=startTimer;

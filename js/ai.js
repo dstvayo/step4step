@@ -194,12 +194,12 @@ Regeln:
     return { thisCount, lastCount, diff };
   }
 
-  /* ── Chat-Verlauf in localStorage ── */
+  /* ── Chat-Verlauf im App-Speicher ── */
   function getChatHistory() {
-    try { return JSON.parse(localStorage.getItem('ai_chat') || '[]'); } catch { return []; }
+    try { return JSON.parse(Store.getItem('ai_chat') || '[]'); } catch { return []; }
   }
-  function saveChatHistory(h) { localStorage.setItem('ai_chat', JSON.stringify(h.slice(-40))); }
-  function clearChatHistory() { localStorage.removeItem('ai_chat'); }
+  function saveChatHistory(h) { Store.setItem('ai_chat', JSON.stringify(h.slice(-40))); }
+  function clearChatHistory() { Store.removeItem('ai_chat'); }
 
   return {
     hasKey, getKey,

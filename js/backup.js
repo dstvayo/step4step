@@ -1,7 +1,7 @@
 'use strict';
 
 /* ── Lokales Backup (nichts wird ins Internet übertragen) ──
-   Inhalt: alle App-Daten aus dem Browser-Speicher (Aufgaben, Historie, Zeit-Protokoll,
+   Inhalt: alle App-Daten aus dem App-Speicher (IndexedDB) (Aufgaben, Historie, Zeit-Protokoll,
    Kategorien, Einstellungen inkl. API-Schlüssel) + alle App-Dateien.
    Ziel:   1. mit Heim-Sync: an den Mac mini, der es auf den USB-Stick legt (10 je Gerät)
            2. sonst ein frei wählbarer lokaler Ordner (Chrome/Edge), dort bleiben die letzten 10
@@ -13,7 +13,7 @@ const Backup = (() => {
   // App-Dateien, die mitgesichert werden (bei neuen Dateien hier und in sw.js ergänzen)
   const APP_FILES = [
     'index.html', 'manifest.json', 'sw.js', 'css/style.css',
-    'js/db.js', 'js/estimate.js', 'js/points.js', 'js/backup.js', 'js/homesync.js', 'js/ai.js', 'js/app.js',
+    'js/store.js', 'js/db.js', 'js/estimate.js', 'js/points.js', 'js/backup.js', 'js/homesync.js', 'js/ai.js', 'js/app.js',
     'icons/icon.svg', 'icons/icon-maskable.svg', 'icons/icon-192.png', 'icons/icon-512.png',
     'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
   ];
@@ -61,9 +61,8 @@ const Backup = (() => {
   }
   async function _collect() {
     const data = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i);
-      data[k] = localStorage.getItem(k);
+    for (const k of Store.keys()) {
+      data[k] = Store.getItem(k);
     }
     const files = {};
     for (const path of APP_FILES) {
@@ -156,14 +155,15 @@ const Backup = (() => {
     const b = JSON.parse(await file.text());
     if (b.format !== 's4s-backup' || !b.data) throw new Error('Das ist keine Step4Step-Backup-Datei.');
     const keepBackupSettings = DB.getSettings();
-    localStorage.clear();
-    Object.entries(b.data).forEach(([k, v]) => localStorage.setItem(k, v));
+    await Store.clear();
+    Object.entries(b.data).forEach(([k, v]) => Store.setItem(k, v));
     // Backup-Stand dieses Geräts nicht mit dem alten Stand überschreiben
     ['lastBackupAt', 'lastBackupInfo', 'backupFolderName', 'homeSync', 'homeSyncLast'].forEach(k => {
       if (k in keepBackupSettings) DB.setSetting(k, keepBackupSettings[k]);
     });
     // Heim-Sync danach wie ein erster Kontakt: zusammenführen, nichts auf dem Server löschen
     if (typeof HomeSync !== 'undefined') HomeSync.resetState();
+    await Store.flush();
     return b;
   }
 

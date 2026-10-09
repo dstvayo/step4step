@@ -16,11 +16,11 @@ const HomeSync = (() => {
   const isApplying = () => applying;
 
   function _state() {
-    try { return JSON.parse(localStorage.getItem(STATE_KEY)) || { rev: 0, base: {} }; }
+    try { return JSON.parse(Store.getItem(STATE_KEY)) || { rev: 0, base: {} }; }
     catch { return { rev: 0, base: {} }; }
   }
-  const _saveState = st => localStorage.setItem(STATE_KEY, JSON.stringify(st));
-  const _read = c => { try { return JSON.parse(localStorage.getItem(c) || '[]'); } catch { return []; } };
+  const _saveState = st => Store.setItem(STATE_KEY, JSON.stringify(st));
+  const _read = c => { try { return JSON.parse(Store.getItem(c) || '[]'); } catch { return []; } };
 
   /* Fingerabdruck eines Datensatzes (FNV-1a) */
   function _hash(o) {
@@ -68,7 +68,7 @@ const HomeSync = (() => {
           }
           n++;
         }
-        localStorage.setItem(coll, JSON.stringify(recs.filter(r => !removed.has(r?.id))));
+        Store.setItem(coll, JSON.stringify(recs.filter(r => !removed.has(r?.id))));
       }
     } finally { applying = false; }
     return n;
@@ -174,18 +174,18 @@ const HomeSync = (() => {
       device_id: old?.device_id || crypto.randomUUID(),
       device_name: old?.device_name || _deviceName(),
     });
-    localStorage.removeItem(STATE_KEY);  // neuer Server → erster Kontakt
+    Store.removeItem(STATE_KEY);  // neuer Server → erster Kontakt
     return info;
   }
 
   function disconnect() {
     DB.setSetting('homeSync', null);
     DB.setSetting('homeSyncLast', null);
-    localStorage.removeItem(STATE_KEY);
+    Store.removeItem(STATE_KEY);
   }
 
   /* Nach dem Einspielen eines Backups: wie ein erster Kontakt behandeln (zusammenführen statt löschen) */
-  function resetState() { localStorage.removeItem(STATE_KEY); }
+  function resetState() { Store.removeItem(STATE_KEY); }
 
   return { isConfigured, isApplying, sync, schedule, connect, disconnect, resetState, uploadBackup, STATE_KEY };
 })();

@@ -5,6 +5,7 @@ PROJECT="/Users/ds-mac/Library/Mobile Documents/com~apple~CloudDocs/6 - App-Proj
 LOG="$PROJECT/autopush.log"
 
 cd "$PROJECT" || exit 1
+git pull --rebase --autostash -q || true
 
 # Nur pushen wenn es wirklich Änderungen gibt
 git add -A
@@ -14,6 +15,7 @@ if git diff --cached --quiet; then
 fi
 
 git commit -m "Auto-Update: $(date '+%d.%m.%Y %H:%M')"
+git pull --rebase --autostash -q || exit 1
 git push
 
 echo "$(date '+%d.%m.%Y %H:%M') – ✅ Gepusht." >> "$LOG"

@@ -16,13 +16,11 @@
 </head>
 <body>
   <div id="app"></div>
-  <script src="js/db.js"></script>
-  <script src="js/estimate.js"></script>
-  <script src="js/points.js"></script>
-  <script src="js/backup.js"></script>
-  <script src="js/homesync.js"></script>
-  <script src="js/ai.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/store.js"></script>
+  <script>
+    Store.boot(["js/db.js", "js/estimate.js", "js/points.js", "js/backup.js", "js/homesync.js", "js/ai.js", "js/app.js"])
+      .catch(e => { document.getElementById('app').textContent = 'Fehler beim Start: ' + e.message; });
+  </script>
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js').catch(() => {});
