@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>CFBundleIdentifier</key><string>de.step4step.erinnerungen</string>
+  <key>CFBundleName</key><string>S4S-Erinnerungen</string>
+  <key>CFBundleExecutable</key><string>S4S-Erinnerungen</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSUIElement</key><true/>
+  <key>NSRemindersUsageDescription</key><string>Step4Step gleicht die Erinnerungsliste „Step4Step“ (Calendar 366) mit deinen Aufgaben ab.</string>
+  <key>NSRemindersFullAccessUsageDescription</key><string>Step4Step gleicht die Erinnerungsliste „Step4Step“ (Calendar 366) mit deinen Aufgaben ab.</string>
+</dict></plist>
