@@ -27,7 +27,8 @@ cat > "$PLIST" <<PL
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>$LABEL</string>
-  <key>ProgramArguments</key><array><string>$EXE</string></array>
+  <!-- über LaunchServices starten (open), damit die Erinnerungs-Freigabe der App gilt -->
+  <key>ProgramArguments</key><array><string>/usr/bin/open</string><string>-g</string><string>-j</string><string>$APP</string></array>
   <key>StartInterval</key><integer>120</integer>
   <key>RunAtLoad</key><true/>
   <key>StandardErrorPath</key><string>$DIR/reminders-bridge.log</string>
@@ -35,4 +36,5 @@ cat > "$PLIST" <<PL
 PL
 for i in $(seq 1 20); do launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1 || break; sleep 0.5; done
 launchctl bootstrap "gui/$(id -u)" "$PLIST" || { sleep 2; launchctl bootstrap "gui/$(id -u)" "$PLIST"; }
+sleep 8; echo "── Protokoll ──"; tail -6 "$DIR/reminders-bridge.log"
 echo "✓ Abgleich läuft jetzt alle 2 Minuten (Protokoll: $DIR/reminders-bridge.log)"
