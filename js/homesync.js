@@ -6,7 +6,8 @@
    Änderungserkennung: Für jeden Datensatz merkt sich das Gerät einen Fingerabdruck des
    zuletzt abgeglichenen Stands. Abweichung = geändert, fehlt = gelöscht. */
 const HomeSync = (() => {
-  const COLLS = ['tasks', 'results', 'categories', 'time_log'];
+  const COLLS = ['tasks', 'results', 'categories', 'time_log', 'projects'];
+  const LEGACY_COLLS = ['tasks', 'results', 'categories', 'time_log'];   // was ein älterer Server kennt
   const STATE_KEY = 'homesync_state';
   const TIMEOUT_MS = 8000;
   let running = null, applying = false, timer = null;
@@ -107,7 +108,10 @@ const HomeSync = (() => {
 
     const { changes, sent } = _localChanges(st.base);
     const res = await _post(c, { device: c.device_id, name: c.device_name, since: st.rev, changes });
+    // Nur als abgeglichen merken, was der Server auch speichert (älterer Server ohne „projects“ → später erneut senden)
+    const supported = Array.isArray(res.colls) ? res.colls : LEGACY_COLLS;
     for (const coll in sent) {
+      if (!supported.includes(coll)) continue;
       const b = st.base[coll] || (st.base[coll] = {});
       for (const [id, h] of Object.entries(sent[coll])) { if (h === null) delete b[id]; else b[id] = h; }
     }

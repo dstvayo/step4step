@@ -17,7 +17,7 @@ import argparse, datetime, hmac, json, os, re, shutil, ssl, sys, threading, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-COLLECTIONS = ('tasks', 'results', 'categories', 'time_log')
+COLLECTIONS = ('tasks', 'results', 'categories', 'time_log', 'projects')
 MAX_BODY = 10 * 1024 * 1024
 SNAPSHOTS_KEEP = 10
 ALLOWED_ORIGINS = ('https://dstvayo.github.io',)
@@ -173,7 +173,7 @@ class Store:
             if lst:
                 out[coll] = lst
         self.save()
-        return {'rev': d['rev'], 'applied': applied, 'changes': out}
+        return {'rev': d['rev'], 'applied': applied, 'changes': out, 'colls': list(COLLECTIONS)}
 
     def summary(self):
         d = self.data

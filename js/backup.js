@@ -13,7 +13,7 @@ const Backup = (() => {
   // App-Dateien, die mitgesichert werden (bei neuen Dateien hier und in sw.js ergänzen)
   const APP_FILES = [
     'index.html', 'manifest.json', 'sw.js', 'css/style.css',
-    'js/store.js', 'js/db.js', 'js/estimate.js', 'js/points.js', 'js/backup.js', 'js/homesync.js', 'js/ai.js', 'js/app.js',
+    'js/store.js', 'js/db.js', 'js/estimate.js', 'js/points.js', 'js/backup.js', 'js/homesync.js', 'js/ai.js', 'js/projects.js', 'js/app.js',
     'icons/icon.svg', 'icons/icon-maskable.svg', 'icons/icon-192.png', 'icons/icon-512.png',
     'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png',
   ];

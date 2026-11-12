@@ -214,7 +214,7 @@ function logDone(t) {
     title:t.title, category:t.category, priority:t.priority, difficulty:t.difficulty||'medium',
     estimated_minutes:t.estimated_minutes, actual_minutes:t.actual_minutes,
     outcome:onTime?'ontime':'overtime', points:t.points??Points.earned(t,!onTime),
-    recurring:!!t.recurring, date:t.done_at||new Date().toISOString(),
+    recurring:!!t.recurring, date:t.done_at||new Date().toISOString(), project_id:t.project_id||null,
   });
 }
 /* Übersprungen (Timer) oder aus der Heute-Liste zurückgelegt */
@@ -222,14 +222,15 @@ function logEvent(t,outcome) {
   DB.addTimeLog({
     id:uuid(), task_id:t.id, series_id:t.series_id||t.id,
     title:t.title, category:t.category, priority:t.priority,
-    estimated_minutes:t.estimated_minutes, outcome, points:0, date:new Date().toISOString(),
+    estimated_minutes:t.estimated_minutes, outcome, points:0, date:new Date().toISOString(), project_id:t.project_id||null,
   });
 }
 
 /* ── Router ── */
 function go(view,params={}) {
   S.view=view; S.params=params;
-  if(['inbox','new','today','timer','ki','history'].includes(view)) S.tab=view;
+  if(['inbox','new','today','timer','ki','history','projects'].includes(view)) S.tab=view;
+  if(['project','new-project','edit-project'].includes(view)||(['new','edit-task'].includes(view)&&params.projectId)) S.tab='projects';
   if(view!=='timer') { Timer.onTick=null; }
   render();
 }
@@ -241,7 +242,8 @@ function render() {
   document.documentElement.setAttribute('data-theme',DB.getSetting('theme','light'));
   document.documentElement.setAttribute('data-font',DB.getSetting('fontSize','normal'));
   const map={welcome:vWelcome,'block-setup':vBlockSetup,inbox:vInbox,new:vNewTask,today:vToday,timer:vTimer,
-             ki:vKI,history:vHistory,'edit-task':vEditTask,archive:vArchive,results:vResults,settings:vSettings,categories:vCategories};
+             ki:vKI,history:vHistory,'edit-task':vEditTask,archive:vArchive,results:vResults,settings:vSettings,categories:vCategories,
+             projects:vProjects,project:vProject,'new-project':vProjectForm,'edit-project':vProjectForm};
   document.getElementById('app').innerHTML=(map[S.view]||vInbox)();
   afterRender();
 }
@@ -268,6 +270,7 @@ function afterRender() {
 /* ── Tab Bar ── */
 const TABS=[
   {id:'inbox',  icon:'📋',label:'Aufgaben'},
+  {id:'projects',icon:'📁',label:'Projekte'},
   {id:'today',  icon:'📅',label:'Heute'},
   {id:'timer',  icon:'⏱️',label:'Timer'},
   {id:'ki',     icon:'🤖',label:'KI-Coach'},
@@ -367,7 +370,8 @@ function vBlockSetup() {
 function vInbox() {
   const cats=DB.getCategories();
   const fCat=S.params.fCat||'all', fPri=S.params.fPri||'all', q=S.params.q||'';
-  let tasks=DB.getTasks().filter(t=>['later','skipped'].includes(t.status));
+  const projIds=new Set(DB.getProjects().map(p=>p.id));
+  let tasks=DB.getTasks().filter(t=>['later','skipped'].includes(t.status)&&!(t.project_id&&projIds.has(t.project_id)));
   if(fCat!=='all') tasks=tasks.filter(t=>t.category===fCat);
   if(fPri!=='all') tasks=tasks.filter(t=>t.priority===fPri);
   if(q) tasks=tasks.filter(t=>t.title.toLowerCase().includes(q.toLowerCase()));
@@ -426,12 +430,14 @@ function vInbox() {
 function vNewTask(task=null) {
   const cats=DB.getCategories();
   const isEdit=!!task;
-  const t=task||{title:'',category:cats[0]?.name||'Privat',priority:'medium',difficulty:'medium',estimated_minutes:5,status:'later',recurring:false};
+  const preProj=!task&&S.params.projectId?DB.getProject(S.params.projectId):null;
+  const t=task||{title:'',category:preProj?.category||cats[0]?.name||'Privat',priority:'medium',difficulty:'medium',estimated_minutes:5,status:'later',recurring:false,project_id:preProj?.id||null};
+  const projects=DB.getProjects().filter(p=>p.status!=='done'||p.id===t.project_id);
   const diff=t.difficulty||'medium';
   const dL={easy:'Leicht',medium:'Mittel',hard:'Schwer'};
   const times=[5,10,15,30,45,60];
   S._estApplied=null;
-  return `<div class="view">${hdr(isEdit?'Bearbeiten':'Neue Aufgabe',isEdit)}
+  return `<div class="view">${hdr(isEdit?'Bearbeiten':(preProj?'Neue Teilaufgabe':'Neue Aufgabe'),isEdit||!!preProj)}
     <div class="content">
       ${!isEdit&&DB.getDoneLog().length?`<button class="btn-link archive-link" data-action="go" data-view="archive">🗂 Aus dem Archiv wählen ›</button>`:''}
       <form class="form" id="task-form">
@@ -440,6 +446,13 @@ function vNewTask(task=null) {
           <label class="form-label">Titel *</label>
           <input type="text" id="f-title" class="form-input" placeholder="Was möchtest du erledigen?" value="${esc(t.title)}" required autofocus>
         </div>
+        ${projects.length?`<div class="form-group">
+          <label class="form-label">Projekt</label>
+          <select id="f-proj" class="form-select">
+            <option value="">– kein Projekt (Aufgabenliste) –</option>
+            ${projects.map(p=>`<option value="${p.id}" ${t.project_id===p.id?'selected':''}>📁 ${esc(p.name)}</option>`).join('')}
+          </select>
+        </div>`:''}
         <div class="form-group">
           <label class="form-label">Kategorie</label>
           <div class="form-row">
@@ -486,7 +499,7 @@ function vNewTask(task=null) {
         </div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" data-action="back">Abbrechen</button>
-          <button type="button" class="btn btn-primary" data-action="save-task">${isEdit?'Speichern ✓':'Aufgabe anlegen ✓'}</button>
+          <button type="button" class="btn btn-primary" data-action="save-task">${isEdit?'Speichern ✓':(preProj?'Teilaufgabe anlegen ✓':'Aufgabe anlegen ✓')}</button>
         </div>
         <div class="points-preview" id="pts-preview">${ptsPreview(t)}</div>
       </form>
@@ -622,7 +635,7 @@ function vToday() {
               <div class="task-title">${esc(t.title)}</div>
               <div class="task-meta">
                 ${priBadge(t,`${PRI_LABEL[t.priority]??'Mittel'} · ${t.estimated_minutes} min`)}
-                <span class="badge badge-cat">${esc(t.category)}</span>
+                ${projBadge(t)||`<span class="badge badge-cat">${esc(t.category)}</span>`}
                 <span class="badge badge-pts">⭐ ${Points.base(t)}</span>
                 ${t.recurring?'<span class="badge badge-rec">🔄</span>':''}
               </div>
@@ -1278,6 +1291,7 @@ function vCategories() {
 document.addEventListener('click', e=>{
   const el=e.target.closest('[data-action]'); if(!el) return;
   const {action,view,id,val,date,color}=el.dataset;
+  if(typeof projectAction==='function'&&projectAction(action,el)) return;
   switch(action) {
     case 'go':         go(view); break;
     case 'back':       goBack(); break;
@@ -1371,6 +1385,9 @@ document.addEventListener('input', e=>{
 
 /* ── Actions ── */
 function goBack() {
+  if(['new','edit-task'].includes(S.view)&&S.params.projectId&&DB.getProject(S.params.projectId)) return go('project',{id:S.params.projectId});
+  if(S.view==='edit-project'&&S.params.id) return go('project',{id:S.params.id});
+  if(['project','new-project'].includes(S.view)) return go('projects');
   const m={'edit-task':'inbox',settings:'inbox',categories:'settings',results:'inbox',archive:'inbox'};
   go(m[S.view]||S.tab||'inbox');
 }
@@ -1391,8 +1408,11 @@ function saveTask() {
     if(!checkBlock(estMin)) return;
   }
   const todayTasks=DB.getTasks().filter(t=>t.status==='today');
+  const projEl=document.getElementById('f-proj');
+  const project_id=projEl?(projEl.value||null):(existing?.project_id||null);
   DB.saveTask({
-    id, title,
+    ...(existing||{}),
+    id, title, project_id,
     category: document.getElementById('f-cat')?.value||'Privat',
     priority: document.getElementById('f-pri')?.value||'medium',
     difficulty: document.getElementById('f-diff')?.value||'medium',
@@ -1402,7 +1422,8 @@ function saveTask() {
     created_at: existing?.created_at||new Date().toISOString(),
     done_at: existing?.done_at||null, actual_minutes: existing?.actual_minutes||null,
   });
-  go('inbox');
+  if(project_id&&DB.getProject(project_id)) go('project',{id:project_id});
+  else go('inbox');
 }
 
 function addToday(id) {
@@ -1853,7 +1874,7 @@ document.addEventListener('visibilitychange',()=>{
 
 // jede Daten-Schreiboperation stößt den Heim-Sync an
 Store.onChange(k=>{
-  if(['tasks','results','categories','time_log'].includes(k)&&typeof HomeSync!=='undefined'&&HomeSync.isConfigured()) HomeSync.schedule();
+  if(['tasks','results','categories','time_log','projects'].includes(k)&&typeof HomeSync!=='undefined'&&HomeSync.isConfigured()) HomeSync.schedule();
 });
 
 /* ── startTimer: Berechtigung anfragen ── */

@@ -679,3 +679,27 @@ body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbin
 .header-update { font-size: 1.25rem; line-height: 1; }
 .header-update.spinning { animation: s4s-spin 1s linear infinite; pointer-events: none; opacity: .6; }
 @keyframes s4s-spin { to { transform: rotate(360deg); } }
+
+/* ── Projekte ── */
+.tab-label { font-size: min(var(--fs-sm), 13px); }
+.proj-card { cursor: pointer; }
+.proj-progress { height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+.proj-progress-fill { height: 100%; background: var(--success, #2F7D4F); border-radius: 3px; transition: width .3s; }
+.badge-proj { background: var(--tint); color: var(--accent); }
+.badge-today-sm { background: var(--tint); color: var(--accent); font-weight: 700; }
+.proj-head { border-left: 4px solid var(--accent); }
+.proj-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.proj-title { font-size: calc(var(--fs) * 1.15); font-weight: 800; margin: 0; overflow-wrap: anywhere; }
+.proj-note { color: var(--text2); font-size: var(--fs-sm); margin: 6px 0 0; white-space: pre-wrap; }
+.proj-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 4px 0 8px; text-align: center; }
+.proj-kpis div { background: var(--bg3); border-radius: var(--radius-sm); padding: 6px 2px; display: flex; flex-direction: column; }
+.proj-kpis strong { font-size: var(--fs-sm); }
+.proj-kpis span { font-size: 11px; color: var(--text2); }
+.kpi-over, .kpi-over strong { color: var(--warning); }
+.proj-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.proj-actions .btn { flex: 1 1 auto; }
+.proj-done-list { margin: 12px 0; }
+.proj-done-list summary { cursor: pointer; color: var(--text2); font-weight: 600; padding: 6px 0; }
+.proj-done-item { padding: 6px 4px; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); }
+.proj-footer { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin: 20px 0 32px; }
+@media (max-width: 380px) { .proj-kpis { grid-template-columns: repeat(2, 1fr); } }

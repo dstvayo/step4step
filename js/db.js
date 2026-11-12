@@ -29,6 +29,12 @@ const DB = (() => {
     saveCategory(c) { c = stamp(c); const a = this.getCategories(); const i = a.findIndex(x=>x.id===c.id); i>=0?a[i]=c:a.push(c); set('categories',a); },
     deleteCategory(id) { set('categories', get('categories').filter(c=>c.id!==id)); },
 
+    // Projekte: eigene Sammlung, Teilaufgaben sind normale Aufgaben mit project_id
+    getProjects:   () => get('projects'),
+    getProject:    id => get('projects').find(p => p.id === id) || null,
+    saveProject(p) { p = stamp(p); const a = get('projects'); const i = a.findIndex(x=>x.id===p.id); i>=0?a[i]=p:a.push(p); set('projects',a); return p; },
+    deleteProject(id) { set('projects', get('projects').filter(p=>p.id!==id)); },
+
     getSettings:   () => JSON.parse(Store.getItem('settings')||'{}'),
     getSetting(k,def) { const s=this.getSettings(); return k in s ? s[k] : def; },
     setSetting(k,v) { const s=this.getSettings(); s[k]=v; Store.setItem('settings',JSON.stringify(s)); },
