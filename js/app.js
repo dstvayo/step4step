@@ -1410,9 +1410,11 @@ function saveTask() {
   const todayTasks=DB.getTasks().filter(t=>t.status==='today');
   const projEl=document.getElementById('f-proj');
   const project_id=projEl?(projEl.value||null):(existing?.project_id||null);
+  const project_order=existing&&existing.project_id===project_id&&existing.project_order!=null?existing.project_order
+    :(project_id?DB.getTasks().filter(t=>t.project_id===project_id&&t.status!=='done').length:null);
   DB.saveTask({
     ...(existing||{}),
-    id, title, project_id,
+    id, title, project_id, project_order,
     category: document.getElementById('f-cat')?.value||'Privat',
     priority: document.getElementById('f-pri')?.value||'medium',
     difficulty: document.getElementById('f-diff')?.value||'medium',
