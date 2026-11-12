@@ -8,11 +8,15 @@
    localStorage wird zusätzlich als Reservekopie mitgeschrieben (falls IndexedDB ausfällt).
    Erster Start nach dem Umbau: vorhandene localStorage-Daten werden übernommen. */
 const Store = (() => {
-  const DB_NAME = 's4s-data', OS = 'kv', MARKER = '__migrated';
+  const DB_NAME = 's4s-data', OS = 'kv', MARKER = '__migrated', JOURNAL = '__s4s_pending';
   const mem = new Map();
   const pending = new Map();          // key → Wert | null (= löschen)
   const listeners = [];
   let idb = null, flushTimer = null, mode = 'local';
+  /* Journal: Schlüssel, die schon in localStorage, aber noch nicht in IndexedDB stehen.
+     Wird die App direkt nach einer Änderung geschlossen, holt der nächste Start sie von dort nach. */
+  const journal = new Set();
+  const _saveJournal = () => { try { journal.size ? localStorage.setItem(JOURNAL, JSON.stringify([...journal])) : localStorage.removeItem(JOURNAL); } catch {} };
 
   const _open = () => new Promise((res, rej) => {
     const r = indexedDB.open(DB_NAME, 1);
@@ -30,7 +34,7 @@ const Store = (() => {
 
   function _lsKeys() {
     const k = []; try { for (let i = 0; i < localStorage.length; i++) k.push(localStorage.key(i)); } catch {}
-    return k;
+    return k.filter(x => x !== JOURNAL);
   }
   function _mirror(k, v) {
     try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* Speicher voll – IndexedDB reicht */ }
@@ -43,7 +47,7 @@ const Store = (() => {
     return new Promise(res => {
       const tx = idb.transaction(OS, 'readwrite'); const st = tx.objectStore(OS);
       for (const [k, v] of batch) v === null ? st.delete(k) : st.put(v, k);
-      tx.oncomplete = () => res();
+      tx.oncomplete = () => { batch.forEach(([k]) => { if (!pending.has(k)) journal.delete(k); }); _saveJournal(); res(); };
       tx.onerror = tx.onabort = () => { batch.forEach(([k, v]) => { if (!pending.has(k)) pending.set(k, v); }); res(); };
     });
   }
@@ -60,6 +64,13 @@ const Store = (() => {
         pending.set(MARKER, new Date().toISOString());
       }
       data.forEach((v, k) => { if (k !== MARKER) mem.set(k, v); });
+      // Nicht mehr gespeicherte Änderungen vom letzten Mal nachholen (localStorage ist dort aktueller)
+      let open = []; try { open = JSON.parse(localStorage.getItem(JOURNAL) || '[]'); } catch {}
+      for (const k of open) {
+        const v = localStorage.getItem(k);
+        if (v === null) { mem.delete(k); pending.set(k, null); } else { mem.set(k, v); pending.set(k, v); }
+        journal.add(k);
+      }
       mode = 'idb';
       await flush();
     } catch (e) {
@@ -74,10 +85,10 @@ const Store = (() => {
 
   function getItem(k) { return mem.has(k) ? mem.get(k) : null; }
   function setItem(k, v) {
-    v = String(v); mem.set(k, v); pending.set(k, v); _mirror(k, v); _schedule();
+    v = String(v); mem.set(k, v); pending.set(k, v); _mirror(k, v); if (idb) { journal.add(k); _saveJournal(); } _schedule();
     listeners.forEach(fn => { try { fn(k); } catch (e) { console.error(e); } });
   }
-  function removeItem(k) { mem.delete(k); pending.set(k, null); _mirror(k, null); _schedule(); }
+  function removeItem(k) { mem.delete(k); pending.set(k, null); _mirror(k, null); if (idb) { journal.add(k); _saveJournal(); } _schedule(); }
   function keys() { return [...mem.keys()]; }
   async function clear() {
     for (const k of mem.keys()) pending.set(k, null);

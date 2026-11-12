@@ -285,6 +285,7 @@ const hdr=(title,back=false)=>`<div class="app-top">
     </div>
     <div class="header-right">
       <h1 class="header-title">${title}</h1>
+      <button class="btn-icon header-update${S.restarting?' spinning':''}" data-action="app-restart" aria-label="Neueste Version laden" title="Neueste Version laden">↻</button>
       <button class="btn-icon header-settings" data-action="go" data-view="settings" aria-label="Einstellungen">⚙️</button>
     </div>
   </header>
@@ -1176,19 +1177,27 @@ async function homeSyncConnect() {
 /* ── Neustart: neueste Version holen, App-Dateien frisch cachen, neu laden ──
    Daten (App-Speicher) sind davon nicht betroffen. */
 async function restartApp() {
+  if(S.restarting) return;
   if(!['IDLE','ALL_DONE'].includes(Timer.state)&&
      !confirm('Ein Timer-Block läuft. Beim Neustart wird er beendet – erledigte Aufgaben bleiben gespeichert, die Punkte dieses Blocks aber nicht.\n\nTrotzdem neu starten?')) return;
   S.restarting=true; render();
   try {
-    const reg=await navigator.serviceWorker?.getRegistration();
-    await reg?.update();
-    const sw=navigator.serviceWorker?.controller;
-    if(sw) await new Promise(res=>{   // Service Worker lädt alle Dateien frisch (max. 8 s)
-      const ch=new MessageChannel(); ch.port1.onmessage=res;
-      sw.postMessage('refresh',[ch.port2]); setTimeout(res,8000);
-    });
-  } catch(e) { /* Neu laden klappt auch ohne Service Worker */ }
-  location.reload();
+    // Ohne Internet nichts löschen – sonst startet die App offline nicht mehr
+    const probe=await fetch('index.html?check='+Date.now(),{cache:'no-store'});
+    if(!probe.ok) throw new Error('offline');
+  } catch(e) {
+    S.restarting=false; render();
+    alert('Keine Internetverbindung – die App läuft weiter mit der bisherigen Version.');
+    return;
+  }
+  try { await Store.flush(); } catch(e) {}
+  try {   // App-Dateien komplett neu laden (Aufgaben liegen in IndexedDB und bleiben erhalten)
+    const regs=await navigator.serviceWorker?.getRegistrations?.()||[];
+    await Promise.all(regs.map(r=>r.unregister()));
+    const keys=await caches?.keys?.()||[];
+    await Promise.all(keys.filter(k=>k.startsWith('s4s-')).map(k=>caches.delete(k)));
+  } catch(e) { /* neu laden klappt auch so */ }
+  location.replace(location.pathname+'?v='+Date.now());
 }
 
 async function backupNow(skipHome=false) {

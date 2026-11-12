@@ -674,3 +674,8 @@ body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbin
   .block-setup-hero { padding: 24px 24px 20px; }
   .block-setup-logo { width: 60px; height: 60px; }
 }
+
+/* Update-Knopf in der Kopfleiste */
+.header-update { font-size: 1.25rem; line-height: 1; }
+.header-update.spinning { animation: s4s-spin 1s linear infinite; pointer-events: none; opacity: .6; }
+@keyframes s4s-spin { to { transform: rotate(360deg); } }
