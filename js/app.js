@@ -21,6 +21,19 @@ function _getAC() {
   }, {once:true, passive:true});
 });
 
+/* ── Symbole: einfarbige Linien-Icons in CD-Farbe (übernehmen die Textfarbe, Größe = Schriftgröße) ── */
+const ICONS={
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  calendar:'<rect x="3" y="4.5" width="18" height="17" rx="2.5"/><path d="M16 2.5v4M8 2.5v4M3 10h18"/>',
+  play:'<path d="M7 4.5v15l12-7.5z" fill="currentColor" stroke-linejoin="round"/>',
+  list:'<rect x="8" y="2.5" width="8" height="4" rx="1"/><path d="M16 4.5h2a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2h2M9 11.5h6M9 16h6"/>',
+  timer:'<circle cx="12" cy="13.5" r="8"/><path d="M12 9.5v4l2.5 2M10 2.5h4"/>',
+  smile:'<circle cx="12" cy="12" r="9.5"/><path d="M8 14.5s1.5 2 4 2 4-2 4-2M9 9.5h.01M15 9.5h.01"/>',
+  arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/>',
+};
+const ico=(n,cls='')=>`<svg class="ico${cls?' '+cls:''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n]||''}</svg>`;
+
 /* ── Prioritäten: Blau = Dringend, Rot = Hoch, Gelb = Mittel, Grün = Niedrig ── */
 const PRIOS=['urgent','high','medium','low'];
 const PRI_LABEL={urgent:'Dringend',high:'Hoch',medium:'Mittel',low:'Niedrig'};
@@ -327,10 +340,10 @@ function vWelcome() {
     <h2 class="welcome-title">Step4Step</h2>
     <p class="welcome-subtitle">Dein persönlicher Motivator</p>
     <div class="onboarding-steps">
-      <div class="onboard-step"><span class="step-icon">📋</span><span>Sammeln</span><span class="step-arrow"> → </span></div>
-      <div class="onboard-step"><span class="step-icon">📅</span><span>Heute planen</span><span class="step-arrow"> → </span></div>
-      <div class="onboard-step"><span class="step-icon">⏱️</span><span>Erledigen</span><span class="step-arrow"> → </span></div>
-      <div class="onboard-step"><span class="step-icon">🎉</span><span>Happy sein!</span></div>
+      <div class="onboard-step">${ico('list','step-icon')}<span>Sammeln</span>${ico('arrow','step-arrow')}</div>
+      <div class="onboard-step">${ico('calendar','step-icon')}<span>Heute planen</span>${ico('arrow','step-arrow')}</div>
+      <div class="onboard-step">${ico('timer','step-icon')}<span>Erledigen</span>${ico('arrow','step-arrow')}</div>
+      <div class="onboard-step">${ico('smile','step-icon')}<span>Happy sein!</span></div>
     </div>
     <button class="btn btn-primary btn-lg" data-action="welcome-start">Willkommen ›</button>
     <label class="checkbox-label"><input type="checkbox" id="hideWelcome"> Beim nächsten Start nicht mehr anzeigen</label>
@@ -377,6 +390,7 @@ function vInbox() {
   if(q) tasks=tasks.filter(t=>t.title.toLowerCase().includes(q.toLowerCase()));
   tasks.sort((a,b)=>{ const pd=(PRI_ORDER[a.priority]??2)-(PRI_ORDER[b.priority]??2); return pd||(new Date(a.created_at)-new Date(b.created_at)); });
   const getCatColor=name=>cats.find(c=>c.name===name)?.color||'#6b7280';
+  const filtered=fCat!=='all'||fPri!=='all'||!!q;
   const blockMin=DB.getSetting('todayBlockMinutes',0);
   const todayTasks=DB.getTasks().filter(t=>t.status==='today');
   const todayMin=todayTasks.reduce((s,t)=>s+t.estimated_minutes,0);
@@ -389,12 +403,10 @@ function vInbox() {
         <span class="stat-item ${todayMin>blockMin?'stat-over':'stat-ok'}">${blockMin-todayMin>=0?blockMin-todayMin+' min frei':Math.abs(blockMin-todayMin)+' min über'}</span>
         <button class="btn-link" data-action="reset-block">ändern</button>
       </div>`:''}
-      <div class="inbox-actions">
-        <p class="scroll-hint">Wähle hier deine Aufgaben für Heute.</p>
-        <button class="btn btn-sm btn-primary inbox-new-btn" data-action="go" data-view="new">➕ Neue Aufgabe</button>
-      </div>
-      <div class="filters">
-        <input type="search" class="search-input" placeholder="Aufgabe suchen…" value="${esc(q)}" data-action="search">
+      <button class="btn btn-primary btn-full new-btn" data-action="go" data-view="new">${ico('plus')}Neue Aufgabe</button>
+      <div class="filter-card">
+        <div class="filter-head">Aufgaben filtern</div>
+        <div class="search-wrap">${ico('search')}<input type="search" class="search-input" placeholder="Aufgabe suchen…" value="${esc(q)}" data-action="search"></div>
         <div class="filter-row">
           <select class="select-sm" data-action="fcat">
             <option value="all" ${fCat==='all'?'selected':''}>Alle Kategorien</option>
@@ -407,6 +419,7 @@ function vInbox() {
         </div>
       </div>
       ${DB.getDoneLog().length?`<button class="btn-link archive-link" data-action="go" data-view="archive">🗂 Archiv – erledigte Aufgaben wieder verwenden ›</button>`:''}
+      <div class="list-head"><span>${tasks.length} ${tasks.length===1?'Aufgabe':'Aufgaben'}${filtered?' · gefiltert':''}</span>${filtered?`<button class="btn-link" data-action="filter-reset">Filter zurücksetzen</button>`:''}</div>
       ${tasks.length===0
         ?`<div class="empty-state"><div class="empty-icon">📋</div><p>Keine Aufgaben gefunden.</p></div>`
         :tasks.map(t=>`<div class="task-card task-card-v2 pri-card ${priClass(t)}">
@@ -477,9 +490,9 @@ function vNewTask(task=null) {
           <input type="hidden" id="f-diff" value="${diff}">
         </div>
         <div class="form-group">
-          <label class="form-label">Geschätzte Zeit</label>
-          <div class="btn-group" id="time-btns">
-            ${times.map(m=>`<button type="button" class="btn btn-toggle${t.estimated_minutes===m?' active':''}" data-action="set-time" data-val="${m}">${m} min</button>`).join('')}
+          <label class="form-label">Geschätzte Zeit in Minuten</label>
+          <div class="btn-group time-btns" id="time-btns">
+            ${times.map(m=>`<button type="button" class="btn btn-toggle${t.estimated_minutes===m?' active':''}" data-action="set-time" data-val="${m}">${m}</button>`).join('')}
           </div>
           <input type="number" id="f-time" class="form-input mt-sm" placeholder="Benutzerdefiniert (min)" value="${t.estimated_minutes}" min="1" max="480">
           <div id="est-hint">${estHint(t.title,t.category,t.estimated_minutes)}</div>
@@ -711,7 +724,7 @@ function vTimer() {
   /* ALL DONE */
   if(Timer.state==='ALL_DONE') {
     return `<div class="view">${hdr('Timer')}
-      <div class="content">
+      <div class="content alldone-content">
         <div class="alldone-header">
           <div class="alldone-icon">🎉</div>
           <h2 class="alldone-title">${Timer.allDone?'Alle Aufgaben erledigt!':'Block geschafft!'}</h2>
@@ -827,8 +840,10 @@ function vTimer() {
 
         ${isOvertime?`<div class="overtime-dialog card">
           <div class="overtime-icon">⏰</div>
-          <h3 class="overtime-title">Zeit abgelaufen!</h3>
-          <p class="overtime-sub">Hast du die Aufgabe erledigt? Jetzt gibt es noch ${Points.earned(t,true)} statt ${Points.base(t)} Punkte.</p>
+          <div class="overtime-text">
+            <h3 class="overtime-title">Zeit abgelaufen!</h3>
+            <p class="overtime-sub">Hast du die Aufgabe erledigt? Jetzt gibt es noch ${Points.earned(t,true)} statt ${Points.base(t)} Punkte.</p>
+          </div>
         </div>`:''}
 
         ${bLeft!==null?`<div class="block-timer">
@@ -1299,6 +1314,7 @@ document.addEventListener('click', e=>{
       if(document.getElementById('hideWelcome')?.checked) DB.setSetting('hideWelcome',true);
       go('block-setup'); break;
     }
+    case 'filter-reset': go('inbox'); break;
     case 'edit':       go('edit-task',{id}); break;
     case 'add-today':  addToday(id); break;
     case 'rm-today':   rmToday(id); break;

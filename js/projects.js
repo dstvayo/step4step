@@ -96,10 +96,8 @@ function vProjects() {
   return `<div class="view">${hdr('Projekte')}
     <div class="content">
       ${updateBanner()}
-      <div class="inbox-actions">
-        <p class="scroll-hint">Tippe auf ein Projekt, um seine Aufgaben zu sehen.</p>
-        <button class="btn btn-sm btn-primary inbox-new-btn" data-action="new-project">➕ Neues Projekt</button>
-      </div>
+      <button class="btn btn-primary btn-full new-btn" data-action="new-project">${ico('plus')}Neues Projekt</button>
+      <p class="scroll-hint">Tippe auf ein Projekt, um seine Aufgaben zu sehen.</p>
       ${active.length === 0
         ? `<div class="empty-state"><div class="empty-icon">📁</div><p>Noch keine Projekte.</p><p>Lege ein Projekt an und füge Aufgaben hinzu.</p></div>`
         : `<div class="proj-list">${active.map(row).join('')}</div>`}
@@ -140,9 +138,9 @@ function vProject() {
         </div>
         ${total ? `<div class="proj-progress"><div class="proj-progress-fill" style="width:${Math.round(doneList.length / total * 100)}%"></div></div>` : ''}
         <div class="proj-actions">
-          <button class="btn btn-secondary" data-action="new-subtask" data-id="${p.id}">➕ Neue Aufgabe</button>
-          ${waiting.length ? `<button class="btn btn-today" data-action="project-today" data-id="${p.id}">📅 Alle in Heute (${fmtMin(waitMin)})</button>` : ''}
-          ${open.length ? `<button class="btn btn-primary btn-full" data-action="project-start" data-id="${p.id}">▶ Alle in Heute &amp; starten</button>` : ''}
+          <button class="btn btn-secondary" data-action="new-subtask" data-id="${p.id}">${ico('plus')}Neue Aufgabe</button>
+          ${waiting.length ? `<button class="btn btn-today" data-action="project-today" data-id="${p.id}">${ico('calendar')}Alle in Heute (${fmtMin(waitMin)})</button>` : ''}
+          ${open.length ? `<button class="btn btn-primary btn-full" data-action="project-start" data-id="${p.id}">${ico('play')}Alle in Heute &amp; starten</button>` : ''}
         </div>
       </div>
 

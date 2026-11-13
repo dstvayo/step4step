@@ -723,3 +723,65 @@ body.is-dragging { user-select: none; -webkit-user-select: none; cursor: grabbin
 .proj-done-meta { font-size: var(--fs-sm); }
 .empty-state.small { padding: 12px; }
 .proj-footer { flex-wrap: wrap; justify-content: flex-start; }
+
+/* ══ Design-Runde 1 (Review 13.11.2026) ══════════════════════════════ */
+
+/* Symbole: Linien-Icons in CD-Farbe, so groß wie der Text daneben */
+.ico { width: 1.2em; height: 1.2em; flex: none; vertical-align: -.22em; }
+.btn .ico { color: var(--accent); }
+.btn-primary .ico, .btn-success .ico, .btn-warning .ico, .btn-danger .ico { color: #fff; }
+
+/* S01 Willkommen: Ablauf mit CD-Symbolen */
+.onboard-step { gap: 6px; }
+.onboard-step .step-icon { font-size: inherit; color: var(--cd-dunkelblau); }
+.onboard-step .step-arrow { width: 1em; height: 1em; color: var(--cd-mittelblau); margin: 0 2px; }
+[data-theme="dark"] .onboard-step .step-icon { color: var(--accent); }
+
+/* S03/S07: „Neue Aufgabe“ / „Neues Projekt“ über die ganze Breite */
+.new-btn { min-height: 46px; margin: 4px 0 12px; }
+
+/* S03: Suche und Filter klar als eigener Bereich */
+.filter-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.filter-head { font-size: var(--fs-sm); font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; }
+.search-wrap { position: relative; }
+.search-wrap .ico { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text2); pointer-events: none; }
+.search-wrap .search-input { padding-left: 34px; }
+.list-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: var(--fs-sm); font-weight: 700; color: var(--text2); margin: 2px 2px 8px; }
+
+/* S04/S05: Minuten-Buttons nur mit Zahl, in einer Reihe */
+.time-btns { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.time-btns .btn-toggle { padding: 10px 0; font-size: var(--fs); }
+
+/* S08: drei Projekt-Buttons gleich hoch, gleiche Schrift */
+.proj-actions { flex-direction: column; gap: 8px; margin-top: 12px; }
+.proj-actions .btn { width: 100%; min-height: 46px; padding: 0 16px; font-size: var(--fs); font-weight: 600; border-radius: var(--radius); }
+.proj-actions .btn-secondary, .proj-actions .btn-today { background: var(--tint); color: var(--accent); }
+
+/* S14/S15/S16: Timer kompakter */
+.timer-content { gap: 12px; padding-top: 12px; padding-bottom: 16px; }
+.timer-motivation { padding: 8px 12px; line-height: 1.4; }
+.timer-task { padding: 12px 14px; margin-bottom: 0; }
+.timer-task .task-title-lg { font-size: var(--fs-lg); margin-bottom: 2px; }
+.timer-content .timer-clock-svg { width: 168px; height: 168px; }
+.timer-content .block-timer { padding: 8px 12px; gap: 5px; }
+.timer-stats { gap: 2px 12px; }
+.done-list-mini { padding: 10px 14px; margin-bottom: 0; }
+.done-list-mini .done-list-title { margin-bottom: 4px; }
+.done-task-row { padding: 4px 0; }
+.overtime-dialog { display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px 14px; margin-bottom: 0; }
+.overtime-icon { font-size: 34px; margin: 0; }
+.overtime-title { font-size: var(--fs-lg); margin-bottom: 2px; }
+.overtime-sub { font-size: var(--fs-sm); line-height: 1.4; }
+.footer-fixed { padding-top: 10px; }
+.footer-fixed .tmain { padding-top: 12px; padding-bottom: 12px; }
+.tbtn { padding: 6px 2px; }
+.tbtn-ico { font-size: 18px; }
+
+/* S18: Block geschafft kompakter */
+.alldone-content { padding-bottom: 16px; }
+.alldone-header { padding: 8px 16px 10px; }
+.alldone-icon { font-size: 44px; margin-bottom: 4px; }
+.alldone-title { margin-bottom: 2px; }
+.alldone-content .card { padding: 12px 14px; margin-bottom: 10px; }
+.alldone-content .card-title { margin-bottom: 6px; }
+.points-big { font-size: 34px; }
